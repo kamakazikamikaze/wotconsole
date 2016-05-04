@@ -232,7 +232,7 @@ if __name__ == '__main__':
     parser.add_argument('outputfile', metavar = 'FILENAME', help = 'Name of output filename')
     args = parser.parse_args()
     """
-    directory = sorted([x for x in os.listdir('.') if 'confg' in x])
+    directory = sorted([x for x in os.listdir('./configs/') if 'confg' in x])
     for item in enumerate(directory):
         print(' [' + str(item[0] + 1) + ']', item[1])
     name = None
@@ -252,7 +252,7 @@ if __name__ == '__main__':
     hostname = raw_input('Enter hostname of new switch: ')
     # perhaps extract options again?
     directory = sorted([x for x in os.listdir(
-        '.') if ('.csv' in x or '.xls' in x)])
+        './configs/') if ('.csv' in x or '.xls' in x)])
     for item in enumerate(directory):
         print(' [' + str(item[0] + 1) + ']', item[1])
     name = None
@@ -276,8 +276,8 @@ if __name__ == '__main__':
         baseconfig = 'baseconfig.txt'
     else:
         baseconfig = switch_types[SwitchType] + 'base.txt'
-    with open(baseconfig, 'r') as b:
-        with open('temp.o', 'w') as t:
+    with open('./templates/' + baseconfig, 'r') as b:
+        with open('./output/temp.o', 'w') as t:
             for line in b:
                 if not 'no ip http server' in line.lower():
                     t.write(line)
@@ -285,8 +285,8 @@ if __name__ == '__main__':
                     break
 
     # parse the config file argument and then extract the interfaces
-    parse = CiscoConfParse(file, factory=True)
-    NewConfig = CiscoConfParse('temp.o', factory=True)
+    parse = CiscoConfParse('./configs/' + file, factory=True)
+    NewConfig = CiscoConfParse('./output/temp.o', factory=True)
 
     # read the csv argument and save as a list that defines the port mapping
     with open(csvFile, 'rb') as f:
@@ -313,5 +313,5 @@ if __name__ == '__main__':
             elif halfway:
                 NewConfig.append_line(line.rstrip())
     NewConfig.commit()
-    FileExport(NewConfig)
-    os.remove('temp.o')
+    FileExport('./output/' + NewConfig)
+    os.remove('./output/temp.o')
