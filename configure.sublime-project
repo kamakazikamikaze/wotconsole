@@ -1,0 +1,15 @@
+{
+	"folders":
+	[
+		{
+			"path": "."
+		}
+	],
+	"settings":
+	{
+		"pep8_autoformat": 
+		{
+			"aggresive" : 0
+		}
+	}
+}

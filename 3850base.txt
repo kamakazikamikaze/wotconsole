@@ -1,0 +1,227 @@
+
+no service pad
+service timestamps debug datetime localtime
+service timestamps log datetime localtime
+service password-encryption
+service compress-config
+no service dhcp
+
+!
+boot-start-marker
+boot-end-marker
+!
+!
+vrf definition Mgmt-vrf
+ !
+ address-family ipv4
+ exit-address-family
+ !
+ address-family ipv6
+ exit-address-family
+!
+logging file flash:msglog 4096 1024 emergencies
+logging buffered 32768
+logging console errors
+enable secret 4 z9tnSyop5XhARPhToJMMH4iFjJEp9niA5dvDZHdZjBA
+!
+username default password 7 11081A1607135E59
+aaa new-model
+!
+!
+aaa group server tacacs+ tac_admin
+ server 10.11.64.5
+ server 10.11.64.6
+!
+aaa authentication login default group tacacs+ local line
+aaa authorization exec default group tacacs+ if-authenticated
+aaa authorization commands 15 default group tacacs+ if-authenticated
+aaa accounting exec default start-stop group tacacs+
+aaa accounting commands 15 default start-stop group tacacs+
+aaa accounting network default start-stop group tacacs+
+!
+!
+!
+!
+!
+aaa session-id common
+clock timezone MST -7 0
+clock summer-time MDT recurring
+!
+authentication mac-move permit
+!
+ip domain-list byu.edu
+ip domain-list dcs.byu.edu
+ip domain-name dcs.byu.edu
+ip name-server 10.8.0.19
+ip name-server 10.8.0.26
+ip device tracking
+ip dhcp smart-relay
+!
+!
+
+!
+!
+no setup express
+!
+!
+qos wireless-default-untrust
+vtp mode transparent
+!
+!
+!
+!
+!
+!
+!
+errdisable recovery cause link-flap
+errdisable recovery interval 30
+diagnostic bootup level minimal
+identity policy webauth-global-inactive
+ inactivity-timer 3600
+!
+spanning-tree mode rapid-pvst
+spanning-tree extend system-id
+!
+redundancy
+ mode sso
+!
+!
+!
+!
+
+!
+!
+!
+lldp run
+!
+!
+!
+class-map match-any non-client-nrt-class
+  match non-client-nrt
+!
+policy-map port_child_policy
+ class non-client-nrt-class
+    bandwidth remaining ratio 10
+!
+!!
+!
+!
+!
+!
+interface GigabitEthernet0/0
+ vrf forwarding Mgmt-vrf
+ no ip address
+ negotiation auto
+!
+
+!
+!
+!
+!
+
+
+!
+interface Vlan1
+ no ip address
+ shutdown
+!
+
+no ip http server
+no ip http secure-server
+!
+!
+logging trap notifications
+logging 10.11.65.3
+!
+snmp-server community igo2byu RW
+snmp-server community expand RO
+snmp-server enable traps snmp linkdown linkup
+snmp-server enable traps cpu threshold
+snmp-server enable traps envmon fan shutdown supply temperature status
+snmp-server enable traps entity
+snmp-server enable traps config
+snmp-server enable traps errdisable
+snmp-server host 10.11.65.20 OIT udp-port 10162
+tacacs-server host 10.11.64.5
+tacacs-server host 10.11.64.6
+tacacs-server directed-request
+tacacs-server key 7 09431C004911471B5909
+!
+!
+!
+banner login ^
+**********************************************************************
+                            NOTICE TO USERS
+ This system is the property of Brigham Young University.
+ It is for AUTHORIZED use only. Users (authorized or unauthorized) have no
+ explicit or implicit expectation of privacy.
+
+ Any or all uses of this system and access to this system may be
+ intercepted, monitored, recorded, copied, audited, inspected, and disclosed
+ to authorized site, Brigham Young University, and law enforcement personnel,
+ as well as authorized officials of other agencies, both domestic and foreign.
+ By using this system, the user consents to such interception, monitoring,
+ recording, copying, auditing, inspection, and disclosure at the discretion of
+ authorized site or university  personnel.
+
+ Unauthorized or improper use of this system may result in administrative
+ disciplinary action and civil and criminal penalties. By continuing to use
+ this system you indicate your awareness of andconsent to these terms and
+ conditions of use. LOG OFF IMMEDIATELY if you do not agree to the conditions
+ stated in this warning.
+******************************************************************************
+^
+alias exec cpu show processes cpu sorted | exclude 0.00%  0.00%  0.00%
+alias exec cdp show cdp neighbor | ex SEP
+!
+line con 0
+ transport output telnet
+ stopbits 1
+line aux 0
+ stopbits 1
+line vty 0 4
+ transport preferred none
+ transport input telnet ssh
+ transport output telnet
+line vty 5 15
+ exec-timeout 15 0
+ transport input telnet ssh
+ transport output telnet
+!
+ntp server 10.11.16.2
+ntp server 10.6.72.7
+wsma agent exec
+ profile httplistener
+ profile httpslistener
+wsma agent config
+ profile httplistener
+ profile httpslistener
+wsma agent filesys
+ profile httplistener
+ profile httpslistener
+wsma agent notify
+ profile httplistener
+ profile httpslistener
+!
+wsma profile listener httplistener
+ transport http
+!
+wsma profile listener httpslistener
+ transport https
+ap dot11 24ghz rrm channel dca 1
+ap dot11 24ghz rrm channel dca 6
+ap dot11 24ghz rrm channel dca 11
+ap dot11 5ghz rrm channel dca 36
+ap dot11 5ghz rrm channel dca 40
+ap dot11 5ghz rrm channel dca 44
+ap dot11 5ghz rrm channel dca 48
+ap dot11 5ghz rrm channel dca 52
+ap dot11 5ghz rrm channel dca 56
+ap dot11 5ghz rrm channel dca 60
+ap dot11 5ghz rrm channel dca 64
+ap dot11 5ghz rrm channel dca 149
+ap dot11 5ghz rrm channel dca 153
+ap dot11 5ghz rrm channel dca 157
+ap dot11 5ghz rrm channel dca 161
+ap group default-group
+end
