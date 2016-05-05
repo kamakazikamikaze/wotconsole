@@ -1,23 +1,14 @@
-
-no service pad
 service timestamps debug datetime localtime
 service timestamps log datetime localtime
 service password-encryption
 service compress-config
 no service dhcp
+!
 
+
+ipv6 mld snooping
 !
-boot-start-marker
-boot-end-marker
-!
-!
-vrf definition Mgmt-vrf
- !
- address-family ipv4
- exit-address-family
- !
- address-family ipv6
- exit-address-family
+
 !
 logging file flash:msglog 4096 1024 emergencies
 logging buffered 32768
@@ -46,7 +37,7 @@ aaa accounting network default start-stop group tacacs+
 aaa session-id common
 clock timezone MST -7 0
 clock summer-time MDT recurring
-!
+
 authentication mac-move permit
 !
 ip domain-list byu.edu
@@ -87,14 +78,12 @@ redundancy
 !
 !
 !
-!
 
-!
 !
 !
 lldp run
 !
-!
+ip tftp blocksize 8192
 !
 class-map match-any non-client-nrt-class
   match non-client-nrt
@@ -103,21 +92,11 @@ policy-map port_child_policy
  class non-client-nrt-class
     bandwidth remaining ratio 10
 !
-!!
 !
+spanning-tree portfast default
 !
-!
-!
-interface GigabitEthernet0/0
- vrf forwarding Mgmt-vrf
- no ip address
- negotiation auto
 !
 
-!
-!
-!
-!
 
 
 !
@@ -125,7 +104,7 @@ interface Vlan1
  no ip address
  shutdown
 !
-
+!
 no ip http server
 no ip http secure-server
 !
@@ -177,51 +156,27 @@ alias exec cdp show cdp neighbor | ex SEP
 line con 0
  transport output telnet
  stopbits 1
+ logging synchronous
 line aux 0
  stopbits 1
+ logging synchronous
 line vty 0 4
  transport preferred none
  transport input telnet ssh
- transport output telnet
+ transport output telnet ssh
+ logging synchronous
 line vty 5 15
  exec-timeout 15 0
  transport input telnet ssh
- transport output telnet
+ transport output telnet ssh
+ logging synchronous
 !
 ntp server 10.11.16.2
 ntp server 10.6.72.7
-wsma agent exec
- profile httplistener
- profile httpslistener
-wsma agent config
- profile httplistener
- profile httpslistener
-wsma agent filesys
- profile httplistener
- profile httpslistener
-wsma agent notify
- profile httplistener
- profile httpslistener
-!
-wsma profile listener httplistener
- transport http
-!
-wsma profile listener httpslistener
- transport https
-ap dot11 24ghz rrm channel dca 1
-ap dot11 24ghz rrm channel dca 6
-ap dot11 24ghz rrm channel dca 11
-ap dot11 5ghz rrm channel dca 36
-ap dot11 5ghz rrm channel dca 40
-ap dot11 5ghz rrm channel dca 44
-ap dot11 5ghz rrm channel dca 48
-ap dot11 5ghz rrm channel dca 52
-ap dot11 5ghz rrm channel dca 56
-ap dot11 5ghz rrm channel dca 60
-ap dot11 5ghz rrm channel dca 64
-ap dot11 5ghz rrm channel dca 149
-ap dot11 5ghz rrm channel dca 153
-ap dot11 5ghz rrm channel dca 157
-ap dot11 5ghz rrm channel dca 161
-ap group default-group
+
+port-channel load-balance src-dst-mac
+crypto key gen rsa modulus 4096
+
 end
+write mem
+

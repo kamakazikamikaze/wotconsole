@@ -33,7 +33,7 @@ def PortChange(config1, config2, csv):
             config2.append_line(port[0].text)
             for child in port[0].children:
                 config2.append_line(child.text)
-            config2.commit()
+    config2.commit()
 
 
 # search interfaces for non-standard configs that will need to be reviewed
@@ -85,7 +85,6 @@ def AddVoiceVlan(config2):
         print("The following ports had a Voice VLAN added. Please manually check that this is appropriate:")
         for each in Modified:
             print(' ', each)
-
     config2.commit()
 
 
@@ -120,18 +119,8 @@ def TrunkCleanUp(config2):
             if 'add' in child.text.lower():
                 Add = True
             TrunkNumbers = set(child.text.split()[-1].split(','))
-            # For Carlos: a Set is a collection that only allows unique values.
-            #   Unlike List, two Sets can be subtracted from each other to obtain
-            #   their 'difference'. This makes it faster and easier to prune
-            #   values instead of having to loop over every one of them. At the
-            #   end we can convert it back to a list so `.join()` can be used.
             NumsToRemove = set(
                 ['1', '1002-1005', '1002', '1003', '1004', '1005'])
-            # for i in NumsToRemove:
-            #     if i in TrunkNumbers:
-            #         TrunkNumbers.remove(i)
-            # for i in TrunkNumbers:
-            #     TrunkVlans.append(i)
             TrunkNumbers = list(TrunkNumbers - NumsToRemove)
             if len(TrunkNumbers) > 0:
                 if Add:
@@ -151,6 +140,7 @@ def RemoveMDIXandDOT1Q(config2):
     for obj in MdixInts:
         if obj != []:
             obj.delete()
+    config2.commit()
     Dot1qInts = config2.find_objects("switchport\strunk\sencapsulation\sdot1q")
     for obj in Dot1qInts:
         if obj != []:
@@ -166,6 +156,7 @@ def AccessCleanUp(config2):
         for child in obj.children:
             if r"switchport trunk" in child.text:
                 child.delete()
+    config2.commit()
     # I found that some configs are missing the "mode access", so I am also
     # applying to any that are missing "switchport mode"
     AccessInts = config2.find_objects_wo_child(
@@ -181,13 +172,18 @@ def AccessCleanUp(config2):
 # this needs to be edited to just extract the IP, and use the standard
 # configuration for the rest of management VLAN
 def ExtractManagement(config1, config2):
+    Vlan1 = config1.find_objects(r"^interface Vlan1$")
+    for vlan in Vlan1:
+        vlan.delete()
+    config1.commit()
     VlanInts = config1.find_objects_wo_child(
         r"^interface Vlan", r"^ ip address")
     for vlan in VlanInts:
+        config2.append_line(vlan.text)
         for child in vlan.children:
             config2.append_line(child.text)
         config2.append_line('!')
-
+    config2.commit()
     # Need to extract the management vlan number to add to the tacacs
     # interface on 4506 switches
     # We should probably create our own append function to add items we want
@@ -217,8 +213,8 @@ def ExtractManagement(config1, config2):
     config2.commit()
 
 
-def FileExport(config2):
-    config2.save_as(outputfile)
+def FileExport(outputfile, config2):
+    config2.save_as('./output/' + outputfile)
     print("\nFile saved as", outputfile)
 
 
@@ -240,7 +236,8 @@ if __name__ == '__main__':
         name = int(raw_input('Please select the file number of the config: '))
     file = directory[name - 1]
 
-    switch_types = ['2960', '3560', '3650', '3750', '3850', '4506', 'Other']
+    # switch_types = ['2960', '3560', '3650', '3750', '3850', '4506', 'Other']
+    switch_types = ['3560', '3850', '4506', 'Other']
     print("Compatible switch models:")
     for switch in enumerate(switch_types):
         print(' [' + str(switch[0] + 1) + ']', switch[1])
@@ -249,8 +246,13 @@ if __name__ == '__main__':
         SwitchType = int(
             raw_input('What switch model are you programming? ')) - 1
 
+    baseconfig = '.txt'
+    if (SwitchType == len(switch_types) - 1):
+        baseconfig = 'baseconfig.txt'
+    else:
+        baseconfig = switch_types[SwitchType] + 'base.txt'
+
     hostname = raw_input('Enter hostname of new switch: ')
-    # perhaps extract options again?
     directory = sorted([x for x in os.listdir(
         './configs/') if ('.csv' in x or '.xls' in x)])
     for item in enumerate(directory):
@@ -267,51 +269,33 @@ if __name__ == '__main__':
         'List all VLANs for snooping, separated by commas: ')
     outputfile = raw_input('Enter output file name: ')
 
-    # The CiscoConfParse package will append our lines at the end of the
-    # config file, which is way after where the `end` directive (IOS `end`
-    # command for CLI configuration) is located. This pretty much invalidates
-    # our config file. We'll instead cut the config template in half, add our
-    # lines, then re-join it into one file.
-    if SwitchType == 6:
-        baseconfig = 'baseconfig.txt'
-    else:
-        baseconfig = switch_types[SwitchType] + 'base.txt'
-    with open('./templates/' + baseconfig, 'r') as b:
-        with open('./output/temp.o', 'w') as t:
-            for line in b:
-                if not 'no ip http server' in line.lower():
-                    t.write(line)
-                else:
-                    break
-
     # parse the config file argument and then extract the interfaces
     parse = CiscoConfParse('./configs/' + file, factory=True)
-    NewConfig = CiscoConfParse('./output/temp.o', factory=True)
+    # The new parser needs a file associated with it, so create a throwaway.
+    # Trying to give it a legit file strangely invokes an error later on...
+    NewConfig = CiscoConfParse(os.tmpfile(), factory=True)
 
     # read the csv argument and save as a list that defines the port mapping
-    with open(csvFile, 'rb') as f:
+    with open('./configs/' + csvFile, 'rb') as f:
         reader = csv.reader(f)
         IntChanges = list(reader)
 
     NewConfig.append_line('!')
     NewConfig.append_line('hostname ' + hostname)
     NewConfig.append_line('!')
+    NewConfig.commit()
+
     VlanExtract(parse, NewConfig)
     PortChange(parse, NewConfig, IntChanges)
     InterfacesForReview(NewConfig)
     AddVoiceVlan(NewConfig)
     TrunkCleanUp(NewConfig)
     RemoveMDIXandDOT1Q(NewConfig)  # This must be run AFTER TrunkCleanUp()
-    # Passes a boolean if we use the same IP
+
     ExtractManagement(parse, NewConfig)
-    halfway = False
-    with open(baseconfig, 'r') as b:
+    NewConfig.append_line('!')
+    with open('./templates/' + baseconfig, 'r') as b:
         for line in b:
-            if 'no ip http server' in line.lower():
-                NewConfig.append_line(line.rstrip())
-                halfway = True
-            elif halfway:
-                NewConfig.append_line(line.rstrip())
+            NewConfig.append_line(line.rstrip())
     NewConfig.commit()
-    FileExport('./output/' + NewConfig)
-    os.remove('./output/temp.o')
+    FileExport(outputfile, NewConfig)
