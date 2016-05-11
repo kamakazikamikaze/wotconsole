@@ -282,7 +282,13 @@ if __name__ == '__main__':
             raw_input('Please select the file number of the old config: '))
     file = directory[name - 1]
 
-    if 'y' in raw_input('Generate full config file? ').lower():
+    if 'n' in raw_input('Generate full config file?[Y|n] ').lower():
+        hostname = raw_input('Enter hostname of new switch: ')
+        outputfile = raw_input('Enter output file name: ')
+        oldconfig = CiscoConfParse('./configs/' + file, factory=True)
+        newconfig = CiscoConfParse(os.tmpfile(), factory=True)
+        migrate_ports(oldconfig, newconfig, hostname)
+    else:
         switch_types = ['3560', '3750', '3850', '4506', 'Other']
         print('Compatible switch models:')
         for switch in enumerate(switch_types):
@@ -327,11 +333,5 @@ if __name__ == '__main__':
             for line in b:
                 newconfig.append_line(line.rstrip())
         newconfig.commit()
-    else:
-        hostname = raw_input('Enter hostname of new switch: ')
-        outputfile = raw_input('Enter output file name: ')
-        oldconfig = CiscoConfParse('./configs/' + file, factory=True)
-        newconfig = CiscoConfParse(os.tmpfile(), factory=True)
-        migrate_ports(oldconfig, newconfig, hostname)
 
     file_export(outputfile, newconfig)
