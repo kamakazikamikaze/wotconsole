@@ -1,39 +1,95 @@
 #!/bin/env python
 from __future__ import print_function
 import os
-import csv
+# import csv
+import openpyxl
+# from pprint import pprint
 from ciscoconfparse import CiscoConfParse
 
 
 def VlanExtract(config1, config2):
+    vlans = []
+    lines = []  # We need to modify the snooping command without calling commit so soon
     AllVlanObjects = config1.find_objects_w_child(r'^vlan', r'^ name')
+    lines.append('ip dhcp snooping vlan ')
+    lines.append('no ip dhcp snooping information option')
+    lines.append('ip dhcp snooping')
+    lines.append('vlan internal allocation policy ascending')
     for obj in AllVlanObjects:
-        config2.append_line("!\n" + obj.text)
+        lines.append("!\n" + obj.text)
+        vlans.append(obj.text.split()[-1])
         for child in obj.children:
-            config2.append_line(child.text)
+            lines.append(child.text)
+    lines[0] += ','.join(vlans)
+    for line in lines:
+        config2.append_line(line)
     config2.commit()
 
 
-# work through the list of port changes, print new interface config to
-# screen, and change all ports in intfs
-def PortChange(config1, config2, csv):
-    for i, j in csv:
-        # print "Old Port: " + i +"\nNew Port: " +j
-        if j != "":
-            port = config1.find_interface_objects(i)
-            # print "!"
-            # print "interface ",j
-            # for child in port[0].children:
-            # print child.text
+def migrate_ports(oldconfig, newconfig, hostname):
+    filtered_files = [x for x in os.listdir(
+        './cutsheets/') if (x.split()[0].split('-')[0] in hostname)]
+    jacks = {}
+    # We'll want to add ports in logical order to the config, so we'll use a
+    # list to track them
+    portorder = []
+    # Originally I had this load all the old jacks/ports first and then add
+    # the new ports, however I realized that this would increase the amount of
+    # iterations necessary later for finding which ports actually applied to
+    # this new switch. While it would be good to have in case we expand this
+    # to a multi-switch config generator, I don't see the need to cling onto
+    # legacy code when it's easy enough to just swap the two points of logic
+    # to allow it
+    for file in [x for x in filtered_files if 'to be' in x.lower()]:
+        wb = openpyxl.load_workbook('./cutsheets/' + file)
+        for ws in wb:
+            if not hostname.lower() in ws['A1'].value.lower():
+                continue
+            for row in ws.rows[3:]:
+                for cell in row:
+                    try:
+                        # CiscoConfParse breaks if there is an extra value, ex.
+                        # F1/0/01 as opposed to F1/0/1. We'll spilt this up and
+                        # re-join it, casting the last/port segment into an integer
+                        # to drop the leading 0
+                        jacks[int(cell.value)] = {
+                            'new port': '/'.join(row[0].value.split('/')[0:-1] + [str(int(row[0].value.split('/')[-1]))]),
+                            'new switch': ws.title
+                        }
+                        portorder.append(int(cell.value))
+                        continue
+                    except (ValueError, TypeError):
+                        pass
+    for file in [x for x in filtered_files if 'as-is' in x.lower()]:
+        wb = openpyxl.load_workbook('./cutsheets/' + file)
+        for ws in wb:
+            for row in ws.rows[1:]:
+                for cell in row:
+                    try:
+                        if int(cell.value) in jacks.keys():
+                            jacks[int(cell.value)].update({
+                                'old port': '/'.join(row[0].value.split('/')[0:-1] + [str(int(row[0].value.split('/')[-1]))]),
+                                'old switch': ws.title
+                            })
+                    except (ValueError, TypeError):
+                        pass
+    for jack in portorder:
+        try:
+            port = oldconfig.find_interface_objects(jacks[jack]['old port'])
             intname = port[0].name
-            port[0].replace(intname, j)
-            # We should probably create our own append function to add items we
-            # want to NewConfig
-            config2.append_line("!")
-            config2.append_line(port[0].text)
+            port[0].replace(intname, jacks[jack]['new port'])
+            newconfig.append_line("!")
+            newconfig.append_line(port[0].text)
             for child in port[0].children:
-                config2.append_line(child.text)
-    config2.commit()
+                newconfig.append_line(child.text)
+        except KeyError:
+            print(
+                jacks[jack]['new port'],
+                'is connected to jack',
+                jack,
+                'which does not exist on the old switch. Please manually add new configuration for it.')
+    # pprint(jacks)
+    newconfig.commit()
 
 
 # search interfaces for non-standard configs that will need to be reviewed
@@ -219,15 +275,6 @@ def FileExport(outputfile, config2):
 
 
 if __name__ == '__main__':
-    """
-    #define input arguments
-    parser = argparse.ArgumentParser()
-    parser.add_argument('file', metavar = 'FILENAME', help = 'Name of cisco config file')
-    parser.add_argument('csv', metavar = 'FILENAME', help = 'csv file of old port to new port.  file descriptions should be cisco legible, with all leading zeros removed')
-    parser.add_argument('voicevlan', metavar = 'TEXT', help = 'voice vlan to be assigned to any access ports that don\'t have a voice vlan')
-    parser.add_argument('outputfile', metavar = 'FILENAME', help = 'Name of output filename')
-    args = parser.parse_args()
-    """
     directory = sorted([x for x in os.listdir('./configs/') if 'confg' in x])
     for item in enumerate(directory):
         print(' [' + str(item[0] + 1) + ']', item[1])
@@ -253,14 +300,6 @@ if __name__ == '__main__':
         baseconfig = switch_types[SwitchType] + 'base.txt'
 
     hostname = raw_input('Enter hostname of new switch: ')
-    directory = sorted([x for x in os.listdir(
-        './configs/') if ('.csv' in x or '.xls' in x)])
-    for item in enumerate(directory):
-        print(' [' + str(item[0] + 1) + ']', item[1])
-    name = None
-    while not name in xrange(1, len(directory) + 1):
-        name = int(raw_input('Please select the CSV file of port changes: '))
-    csvFile = directory[name - 1]
 
     # should we extract a list from the config and present it?
     voicevlan = raw_input('Enter voice VLAN: ')
@@ -276,9 +315,9 @@ if __name__ == '__main__':
     NewConfig = CiscoConfParse(os.tmpfile(), factory=True)
 
     # read the csv argument and save as a list that defines the port mapping
-    with open('./configs/' + csvFile, 'rb') as f:
-        reader = csv.reader(f)
-        IntChanges = list(reader)
+    # with open('./configs/' + csvFile, 'rb') as f:
+    #     reader = csv.reader(f)
+    #     IntChanges = list(reader)
 
     NewConfig.append_line('!')
     NewConfig.append_line('hostname ' + hostname)
@@ -286,7 +325,7 @@ if __name__ == '__main__':
     NewConfig.commit()
 
     VlanExtract(parse, NewConfig)
-    PortChange(parse, NewConfig, IntChanges)
+    migrate_ports(parse, NewConfig, hostname)
     InterfacesForReview(NewConfig)
     AddVoiceVlan(NewConfig)
     TrunkCleanUp(NewConfig)
