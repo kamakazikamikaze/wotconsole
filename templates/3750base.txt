@@ -1,0 +1,157 @@
+!
+service timestamps debug datetime localtime
+service timestamps log datetime localtime
+service password-encryption
+no service dhcp
+!
+!
+logging file flash:msglog 4096 1024 emergencies
+logging buffered 32768
+logging console errors
+enable secret 5 $1$tGeK$ysSODZcCNxyg5s25TMV/m0
+!
+username default password 7 11081A1607135E59
+!
+!
+aaa new-model
+!
+!
+aaa authentication login default group tacacs+ local line
+aaa authorization exec default group tacacs+ if-authenticated
+aaa authorization commands 15 default group tacacs+ if-authenticated
+aaa accounting exec default start-stop group tacacs+
+aaa accounting commands 15 default start-stop group tacacs+
+aaa accounting network default start-stop group tacacs+
+!
+!
+!
+aaa session-id common
+clock timezone MST -7
+clock summer-time MDT recurring
+system mtu routing 1500
+vtp mode transparent
+authentication mac-move permit
+ip domain-list byu.edu
+ip domain-list dcs.byu.edu
+ip domain-name dcs.byu.edu
+ip name-server 10.8.0.19
+ip name-server 10.8.0.26
+ip dhcp smart-relay
+!
+
+!
+no setup express
+!
+crypto pki trustpoint TP-self-signed-3288874752
+ enrollment selfsigned
+ subject-name cn=IOS-Self-Signed-Certificate-3288874752
+ revocation-check none
+ rsakeypair TP-self-signed-3288874752
+!
+!
+!
+!
+!
+errdisable recovery cause link-flap
+errdisable recovery interval 30
+!
+spanning-tree mode rapid-pvst
+no spanning-tree optimize bpdu transmission
+spanning-tree extend system-id
+
+!
+lldp run
+!
+spanning-tree portfast default
+!
+
+!
+!
+!
+interface Vlan1
+ no ip address
+ no ip route-cache
+ no ip mroute-cache
+ shutdown
+!
+!
+ip classless
+no ip http server
+ip http secure-server
+!
+ip sla enable reaction-alerts
+logging trap notifications
+logging 10.11.65.3
+logging 10.11.65.20
+snmp-server engineID local 000000090200000196D2CD00
+snmp-server community igo2byu RW
+snmp-server community expand RO
+snmp-server enable traps snmp linkdown linkup coldstart warmstart
+snmp-server enable traps entity
+snmp-server enable traps cpu threshold
+snmp-server enable traps envmon fan shutdown supply temperature status
+snmp-server enable traps config
+snmp-server enable traps mac-notification change move threshold
+snmp-server enable traps errdisable
+snmp-server host 10.11.65.20 OIT udp-port 10162
+snmp-server host 10.3.34.40 expand
+snmp-server host 10.3.34.41 expand
+tacacs-server host 10.11.64.5 single-connection
+tacacs-server host 10.11.64.6 single-connection
+tacacs-server directed-request
+tacacs-server key 7 11064B0C47065B05562F
+!
+banner login ^
+******************************************************************************
+                            NOTICE TO USERS
+ This system is the property of Brigham Young University.
+ It is for AUTHORIZED use only. Users (authorized or unauthorized) have no
+ explicit or implicit expectation of privacy.
+
+ Any or all uses of this system and access to this system may be
+ intercepted, monitored, recorded, copied, audited, inspected, and disclosed
+ to authorized site, Brigham Young University, and law enforcement personnel,
+ as well as authorized officials of other agencies, both domestic and foreign.
+ By using this system, the user consents to such interception, monitoring,
+ recording, copying, auditing, inspection, and disclosure at the discretion of
+ authorized site or university  personnel.
+
+ Unauthorized or improper use of this system may result in administrative
+ disciplinary action and civil and criminal penalties. By continuing to use
+ this system you indicate your awareness of and consent to these terms and
+ conditions of use. LOG OFF IMMEDIATELY if you do not agree to the conditions
+ stated in this warning.
+******************************************************************************
+^
+alias exec cpu show processes cpu sorted | exclude 0.00%  0.00%  0.00%
+alias exec cdp show cdp neighbor | ex SEP
+!
+line con 0
+ password 7 130C101D590E1D3F
+ transport output telnet ssh
+ logging synchronous
+line vty 0 4
+ password 7 141E15045E06333E
+ transport preferred none
+ transport input telnet ssh
+ transport output telnet ssh
+ logging synchronous
+line vty 5 15
+ exec-timeout 15 0
+ password 7 141E15045E06333E
+ transport input telnet ssh
+ transport output telnet ssh
+ logging synchronous
+!
+ntp clock-period 36028728
+ntp server 10.6.72.7
+ntp server 10.11.16.2
+mac address-table notification change
+mac address-table notification mac-move
+
+port-channel load-balance src-dst-mac
+crypto key gen 
+2048
+
+
+end
