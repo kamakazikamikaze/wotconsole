@@ -149,7 +149,7 @@ ntp server 10.11.16.2
 mac address-table notification change
 mac address-table notification mac-move
 
-port-channel load-balance src-dst-mac
+port-channel load-balance src-dst-ip
 crypto key gen 
 2048
 

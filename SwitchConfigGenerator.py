@@ -24,6 +24,14 @@ feed_ports_regex = {
 
 switch_models = ["3560", "3750", "3850", "4506", "Other"]
 
+cutsheet_dir = "./cutsheets/"
+
+config_dir = "./configs/"
+
+output_dir = "./output/"
+
+template_dir = "./templates/"
+
 
 def condensify_ports(ports):
     # TODO: Accept range of ports and convert to human-readable range
@@ -65,11 +73,13 @@ def migrate_ports(oldconfig, newconfig, hostname):
     nojacks = []
     newjacks = []
     filtered_files = [x for x in os.listdir(
-        "./cutsheets/") if (x.split()[0].split("-")[0] in hostname)]
+        cutsheet_dir) if (x.split()[0].split("-")[0] in hostname)]
+    if len(filtered_files) == 0:
+        raise Exception("No cutsheets found!")
     jacks = {}
     for file in [x for x in filtered_files if (
             "as-is" in x.lower() or "as is" in x.lower())]:
-        wb = openpyxl.load_workbook("./cutsheets/" + file)
+        wb = openpyxl.load_workbook(cutsheet_dir + file)
         for ws in wb:
             for row in ws.rows[1:]:
                 for cell in row:
@@ -87,12 +97,13 @@ def migrate_ports(oldconfig, newconfig, hostname):
                             "old port": portname,
                             "old switch": ws.title
                         }
-                    except Exception as e:
+                    # except Exception as e:
                         # print(e)
+                    except:
                         continue
     for file in [x for x in filtered_files if (
             "to-be" in x.lower() or "to be" in x.lower())]:
-        wb = openpyxl.load_workbook("./cutsheets/" + file)
+        wb = openpyxl.load_workbook(cutsheet_dir + file)
         for ws in wb:
             if not hostname.lower() in ws["A1"].value.lower():
                 continue  # This isn"t a worksheet for the switch
@@ -351,52 +362,52 @@ def extract_management(oldconfig, newconfig):
 
 
 def file_export(outputfile, newconfig):
-    newconfig.save_as("./output/" + outputfile)
+    newconfig.save_as(output_dir + outputfile)
     print("\nFile saved as", outputfile)
 
 
 def setup_feeds(newconfig, switch_type, blades, vlans):
     if "y" in input(
             "\nWould you like to set up feedports?[y|N]: ").lower():
-        # try:
-        finished = False
-        print("When you are finished, type 'no' for the feedport name")
-        print("(Use 'T' or 'G' instead of 'Ten' or 'Gig'!)")
-        while not finished:
-            feedport = input("Feedport name: ").upper()
-            if not feedport.lower() == "no":
-                blade = int(feedport[
-                    [m.span() for m in re.finditer(r"\d", feedport)][0][0]
-                ])
-                if re.search(feed_ports_regex[switch_models[switch_type]], feedport) and (
-                        blade in blades):
-                    exists = newconfig.find_objects(
-                        r"^interface " + feedport.strip())
-                    if len(exists) > 1:
-                        print("Uh, your interface matches several others:")
-                        for each in exists:
-                            print(" ", each.text)
-                        print("Abandoning changes...")
-                    elif len(exists) == 1:
-                        existing = exists[0]
-                        print("Interface already exists!")
-                        print(existing.text)
-                        for line in existing.children:
-                            print(line.text)
-                        if "y" in input("Overwrite?[y|N]: ").lower():
-                            for child in existing.children:
-                                child.delete()
-                            newconfig.commit()
+        try:
+            finished = False
+            print("When you are finished, type 'no' for the feedport name")
+            print("(Use 'T' or 'G' instead of 'Ten' or 'Gig'!)")
+            while not finished:
+                feedport = input("Feedport name: ").upper()
+                if not feedport.lower() == "no":
+                    blade = int(feedport[
+                        [m.span() for m in re.finditer(r"\d", feedport)][0][0]
+                    ])
+                    if re.search(feed_ports_regex[switch_models[switch_type]], feedport) and (
+                            blade in blades):
+                        exists = newconfig.find_objects(
+                            r"^interface " + feedport.strip())
+                        if len(exists) > 1:
+                            print("Uh, your interface matches several others:")
+                            for each in exists:
+                                print(" ", each.text)
+                            print("Abandoning changes...")
+                        elif len(exists) == 1:
+                            existing = exists[0]
+                            print("Interface already exists!")
+                            print(existing.text)
+                            for line in existing.children:
+                                print(line.text)
+                            if "y" in input("Overwrite?[y|N]: ").lower():
+                                for child in existing.children:
+                                    child.delete()
+                                newconfig.commit()
+                                setup_feed(newconfig, feedport)
+                        else:
                             setup_feed(newconfig, feedport)
                     else:
-                        setup_feed(newconfig, feedport)
+                        print(
+                            "That is an invalid port. Either the spelling is wrong or the numbering is out of range!")
                 else:
-                    print(
-                        "That is an invalid port. Either the spelling is wrong or the numbering is out of range!")
-            else:
-                finished = True
-        # except Exception as e:
-        #     print("Exception:", e)
+                    finished = True
+        except Exception as e:
+            print("Exception:", e)
 
 
 def setup_feed(newconfig, feedport):
@@ -439,7 +450,7 @@ def setup_feed(newconfig, feedport):
 
 
 if __name__ == "__main__":
-    directory = sorted([x for x in os.listdir("./configs/") if "confg" in x])
+    directory = sorted([x for x in os.listdir(config_dir) if "confg" in x])
     for item in enumerate(directory):
         print(" [" + str(item[0] + 1) + "]", item[1])
     name = None
@@ -464,7 +475,7 @@ if __name__ == "__main__":
     while len(outputfile) == 0:
         outputfile = input("Enter output file name: ")
 
-    oldconfig = CiscoConfParse("./configs/" + file, factory=True)
+    oldconfig = CiscoConfParse(config_dir + file, factory=True)
     # The new parser needs a file associated with it, so create a throwaway.
     # Trying to give it a legit file strangely invokes an error later on...
     newconfig = CiscoConfParse(os.tmpfile(), factory=True)
@@ -531,7 +542,7 @@ if __name__ == "__main__":
     if createconfig:
         extract_management(oldconfig, newconfig)
         newconfig.append_line("!")
-        with open("./templates/" + baseconfig, "r") as b:
+        with open(template_dir + baseconfig, "r") as b:
             for line in b:
                 newconfig.append_line(line.rstrip())
         newconfig.commit()

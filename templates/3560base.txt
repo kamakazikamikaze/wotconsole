@@ -143,7 +143,7 @@ ntp clock-period 22519438
 ntp server 10.6.72.7
 ntp server 10.11.16.2
 
-port-channel load-balance src-dst-mac
+port-channel load-balance src-dst-ip
 crypto key gen rsa modulus 4096
 
 end

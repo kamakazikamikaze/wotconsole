@@ -174,7 +174,7 @@ line vty 5 15
 ntp server 10.11.16.2
 ntp server 10.6.72.7
 
-port-channel load-balance src-dst-mac
+port-channel load-balance src-dst-ip
 crypto key gen rsa modulus 4096
 
 end
