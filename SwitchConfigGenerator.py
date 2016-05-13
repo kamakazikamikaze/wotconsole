@@ -4,6 +4,7 @@ import os
 import openpyxl
 from ciscoconfparse import CiscoConfParse
 import warnings
+import re
 
 try:  # Portability for Python 3, though 2to3 would convert it
     input = raw_input
@@ -14,21 +15,26 @@ except NameError:
 # Should specific models require different configuration, explicitly state
 # them here
 
-feed_port_regex = {
-    "3560": r"^interface G.*0/11|0/12",
-    "3750": r"^interface.*G",
-    "3850": r"^interface.*/1/",  # Gig OR TenGig
-    "4506": r"^interface.*Ten"
+feed_ports_regex = {
+    "3560": r"Gi?0/11|Gi?0/12",
+    "3750": r"Gi?[1-7]/0/[1-4]",
+    "3850": r"Te?[1-7]/1/[1-4]|Gi[1-7]/1/[1-4]",  # Gig OR TenGig
+    "4506": r"Te?[1-6]/[1-2]|Gi?[1-6]/[3-6]"
 }
 
 switch_models = ["3560", "3750", "3850", "4506", "Other"]
 
 
-def vlan_extract(oldconfig, newconfig, justgetvlans=False):
+def condensify_ports(ports):
+    # TODO: Accept range of ports and convert to human-readable range
+    pass
+
+
+def vlan_extract(oldconfig, newconfig, fullconfig=True):
     vlans = []
     lines = []  # We need to modify the snooping command without calling commit so soon
     AllVlanObjects = oldconfig.find_objects_w_child(r"^vlan", r"^ name")
-    if justgetvlans:
+    if not fullconfig:
         for obj in AllVlanObjects:
             vlans.append(obj.text.split()[-1])
     else:
@@ -52,7 +58,12 @@ def vlan_extract(oldconfig, newconfig, justgetvlans=False):
 
 
 def migrate_ports(oldconfig, newconfig, hostname):
+    hostnotfound = True
     warnings.simplefilter("ignore")
+    # Supervisor blade is not added to spreadsheets
+    blades = set()
+    nojacks = []
+    newjacks = []
     filtered_files = [x for x in os.listdir(
         "./cutsheets/") if (x.split()[0].split("-")[0] in hostname)]
     jacks = {}
@@ -67,11 +78,17 @@ def migrate_ports(oldconfig, newconfig, hostname):
                     # Excel"s autofill, we"ll add the courtesy of dropping it
                     # from the port (not module) number ourselves
                     try:
+                        portname = row[0].value
+                        indices = [m.span()
+                                   for m in re.finditer(r"\d+", portname)]
+                        portname = portname[0:indices[0][
+                            0]] + "/".join([str(int(portname[num[0]:num[1]])) for num in indices])
                         jacks[int(cell.value)] = {
-                            "old port": "/".join(row[0].value.split("/")[0:-1] + [str(int(row[0].value.split("/")[-1]))]),
+                            "old port": portname,
                             "old switch": ws.title
                         }
-                    except:
+                    except Exception as e:
+                        # print(e)
                         continue
     for file in [x for x in filtered_files if (
             "to-be" in x.lower() or "to be" in x.lower())]:
@@ -79,9 +96,28 @@ def migrate_ports(oldconfig, newconfig, hostname):
         for ws in wb:
             if not hostname.lower() in ws["A1"].value.lower():
                 continue  # This isn"t a worksheet for the switch
+            hostnotfound = False
             for row in ws.rows[3:]:
-                portname = "/".join(row[0].value.split("/")[0:-1] +
-                                    [str(int(row[0].value.split("/")[-1]))])
+                portname = row[0].value
+                indices = [m.span() for m in re.finditer(r"\d+", portname)]
+                portname = portname[0:indices[0][
+                    0]] + "/".join([str(int(portname[num[0]:num[1]])) for num in indices])
+                # This grabs the blade number. re.finditer will look for all digits
+                # and will be stored in 'm'. m.span will give the index numbers for
+                # where the match starts (inclusive) and where it ends (exclusive),
+                # and returns them as tuples. Since the blade is the first number,
+                # we want the first match. We then get the first number from that
+                # tuple since it's the index number of the string. You may be asking,
+                # "wait, aren't the cutsheets configured to only use the first letter
+                # of the port type, e.g. 'F|G|T'?" Yes, that's how it is currently,
+                # but since the cutsheet generator was designed by a student and
+                # edited by students, I have this unwarranted fear of someone changing
+                # 'T' to 'Te', etc. after I am long gone and this is still in use
+                blades.add(
+                    int(portname[
+                        [m.span() for m in re.finditer(r"\d", portname)][0][0]
+                    ])
+                )
                 transferred = False
                 for cell in row:
                     try:
@@ -97,24 +133,29 @@ def migrate_ports(oldconfig, newconfig, hostname):
                         continue  # Try next cell
                     except KeyError:
                         # We have a valid jack number but it"s new
-                        print(
-                            "Port",
-                            portname,
-                            "is connected to a new jack. Please configure this manually.")
+                        nojacks.append(portname)
+                        # print(
+                        #     "Port",
+                        #     portname,
+                        #     "is connected to a new jack. Please configure this manually.")
                         newconfig.append_line("!")
                         newconfig.append_line("interface " + portname)
                         newconfig.append_line(" %%NEW CONNECTION%%")
                         transferred = True
                         break
                 if not transferred:
-                    print(
-                        "Port",
-                        portname,
-                        "is not connected to a jack and will be shutdown. Please confirm this manually")
+                    newjacks.append(portname)
+                    # print(
+                    #     "Port",
+                    #     portname,
+                    #     "is not connected to a jack and will be shutdown. Please confirm this manually")
                     newconfig.append_line("!")
                     newconfig.append_line("interface " + portname)
                     newconfig.append_line(" shutdown")
+    if hostnotfound:
+        raise Exception("No 'To Be' cutsheet found! Exiting...")
     newconfig.commit()
+    return blades, nojacks, newjacks
 
 
 # search interfaces for non-standard configs that will need to be reviewed
@@ -138,11 +179,12 @@ def interfaces_for_review(newconfig):
             print(" ", obj.text)
     PurgatoryInts = newconfig.find_objects_wo_child(
         r"^interf", r"^ switchport mode")
+    PurgatoryInts = [obj for obj in PurgatoryInts if not obj.re_search_children(
+        r"^[\s]?shut(down)?$")]
     if PurgatoryInts:
         print("\nThese interfaces did not specify Access or Trunk mode.\nManually review the following:")
         for obj in PurgatoryInts:
-            if not "shutdown" in obj.children:
-                print(" ", obj.text)
+            print(" ", obj.text)
     print("")
 
 
@@ -194,7 +236,7 @@ def trunk_cleanup(newconfig):
         r"^interf", r"^ switchport mode trunk")
     for obj in TrunkInts:
         TrunkLines = obj.re_search_children(r"switchport trunk allowed vlan")
-        obj.delete_children_matching(r"switchport trunk allowed vlan")
+        # obj.delete_children_matching(r"switchport trunk allowed vlan")
         for child in TrunkLines:
             # TrunkVlans = []
             Add = False
@@ -208,10 +250,16 @@ def trunk_cleanup(newconfig):
                 if Add:
                     TrunkConfigLine = " switchport trunk allowed vlan add " + \
                         ",".join(TrunkNumbers)
+                    obj.replace(
+                        r"^ switchport trunk allowed vlan add ",
+                        TrunkConfigLine)
                 else:
                     TrunkConfigLine = " switchport trunk allowed vlan " + \
                         ",".join(TrunkNumbers)
-                obj.append_to_family(TrunkConfigLine)
+                    obj.replace(
+                        r"^ (?!add)(switchport trunk allowed vlan )",
+                        TrunkConfigLine)
+                # obj.append_to_family(TrunkConfigLine)
     newconfig.commit()
 
 
@@ -307,102 +355,87 @@ def file_export(outputfile, newconfig):
     print("\nFile saved as", outputfile)
 
 
-def setup_feeds(oldconfig, newconfig, switch_type, vlans):
+def setup_feeds(newconfig, switch_type, blades, vlans):
     if "y" in input(
-            "Would you like to set up feedports or portchannels?[y|N] ").lower():
-        choice = None
-        while not choice == 0:
-            #            while not choice in xrange(0, 3):
-            print(" [1] Setup feed")
-            print(" [2] Setup port-channel")
-            print(" [0] Exit")
-            choice = int(input("    Select an option: "))
-            try:
-                if int(choice) == 1:
-                    setup_feed(oldconfig, newconfig, switch_type, vlans)
-                elif int(choice) == 2:
-                    setup_channel(oldconfig, newconfig, switch_type, vlans)
-                # elif int(choice) == 0:
-                #     break
-                else:
-                    pass
-            except:
-                pass
-
-
-def setup_feed(oldconfig, newconfig, switch_type, vlans):
-    try:
-        model = None
-        print("Switch Models")
-        while not model in xrange(0, len(switch_models)):
-            for i in xrange(1, len(switch_models) + 1):
-                print(" [" + str(i) + "]", switch_models[i - 1])
-            model = int(input("    Older switch's model: ")) - 1
-
-        print("Select a source interface")
-        oldfeeds = oldconfig.find_objects_wo_child(
-            feed_port_regex[switch_models[model]], r"shut")
-        for feed, num in zip(oldfeeds, xrange(1, len(oldfeeds) + 1)):
-            print(" [" + str(num) + "]", feed.text)
-        print(" [0] Exit")
-        source = None
-        while not source in xrange(0, len(oldfeeds) + 1):
-            try:
-                source = int(input("   Source: "))
-            except ValueError:
-                pass
-
-        if source != 0:
-            sure = ""
-            dest = ""
-            while not "y" in sure.lower():
-                dest = ""
-                while len(dest) == 0:
-                    dest = input(
-                        "Manually enter the new interface name (type 'no' to cancel): ")
-                if dest.lower() == "no":
-                    break
-                else:
-                    sure = input("Is this correct: " + dest + "?[y|N] ")
-            if not dest.lower == "no":
-                exists = newconfig.find_objects(
-                    r"^interface " + dest.strip())
-                if len(exists) > 1:
-                    print("Uh, your interface matches several others:")
-                    for each in exists:
-                        print(each.text)
-                    print("Abandoning changes...")
-                elif len(exists) == 1:
-                    existing = exists[0]
-                    print("Interface already exists!")
-                    print(existing.text)
-                    for line in existing.children:
-                        print(line.text)
-                    if "y" in input("Overwrite?[y|N] ").lower():
-                        for child in existing.children:
-                            child.delete()
-                        newconfig.commit()
-                        exists = newconfig.find_objects(
-                            r"^interface " + dest.strip())
+            "\nWould you like to set up feedports?[y|N]: ").lower():
+        # try:
+        finished = False
+        print("When you are finished, type 'no' for the feedport name")
+        print("(Use 'T' or 'G' instead of 'Ten' or 'Gig'!)")
+        while not finished:
+            feedport = input("Feedport name: ").upper()
+            if not feedport.lower() == "no":
+                blade = int(feedport[
+                    [m.span() for m in re.finditer(r"\d", feedport)][0][0]
+                ])
+                if re.search(feed_ports_regex[switch_models[switch_type]], feedport) and (
+                        blade in blades):
+                    exists = newconfig.find_objects(
+                        r"^interface " + feedport.strip())
+                    if len(exists) > 1:
+                        print("Uh, your interface matches several others:")
+                        for each in exists:
+                            print(" ", each.text)
+                        print("Abandoning changes...")
+                    elif len(exists) == 1:
                         existing = exists[0]
-                        for child in oldfeeds[source - 1].children:
-                            if not "channel-group" in child.text:
-                                existing.append_to_family(child.text)
-                        newconfig.commit()
+                        print("Interface already exists!")
+                        print(existing.text)
+                        for line in existing.children:
+                            print(line.text)
+                        if "y" in input("Overwrite?[y|N]: ").lower():
+                            for child in existing.children:
+                                child.delete()
+                            newconfig.commit()
+                            setup_feed(newconfig, feedport)
+                    else:
+                        setup_feed(newconfig, feedport)
                 else:
-                    newconfig.append_line("!")
-                    newconfig.append_line("interface " + dest.strip())
-                    for child in oldfeeds[source - 1].children:
-                        if not "channel-group" in child.text:
-                            newconfig.append_line(child.text)
-                    newconfig.append_line("!")
-                    newconfig.commit()
-    except Exception as e:
-        print("Exception:", e)
+                    print(
+                        "That is an invalid port. Either the spelling is wrong or the numbering is out of range!")
+            else:
+                finished = True
+        # except Exception as e:
+        #     print("Exception:", e)
 
 
-def setup_channel(oldconfig, newconfig, switch_type, vlans):
-    print("Sorry, this feature has been removed; the option only exists here for legacy reasons")
+def setup_feed(newconfig, feedport):
+    existing = newconfig.find_objects(r"^interface " + feedport.strip())
+    if existing:
+        exists = existing[0]
+        if "y" in input("Would you like to add a description?[y|N]: ").lower():
+            exists.append_to_family(" description " + input("Description: "))
+        if switch_models[switch_type] == "3560":
+            exists.append_to_family(" switchport trunk encapsultion dot1q")
+        exists.append_to_family(" switchport mode trunk")
+        exists.append_to_family(
+            " switchport trunk allowed vlan " +
+            ",".join(vlans))
+        exists.append_to_family(" ip dhcp snooping trust")
+    else:
+        newconfig.insert_before(
+            r"ip dhcp snooping vlan",
+            "interface " + feedport)
+        if "y" in input("Would you like to add a description?[y|N]: ").lower():
+            newconfig.insert_before(
+                r"ip dhcp snooping vlan",
+                " description " +
+                input("Description: "))
+        if switch_models[switch_type] == "3560":
+            newconfig.insert_before(
+                r"ip dhcp snooping vlan",
+                " switchport trunk encapsultion dot1q")
+        newconfig.insert_before(
+            r"ip dhcp snooping vlan",
+            " switchport mode trunk")
+        newconfig.insert_before(r"ip dhcp snooping vlan",
+                                " switchport trunk allowed vlan " +
+                                ",".join(vlans))
+        newconfig.insert_before(
+            r"ip dhcp snooping vlan",
+            " ip dhcp snooping trust")
+        newconfig.insert_before(r"ip dhcp snooping vlan", "!")
+    newconfig.commit()
 
 
 if __name__ == "__main__":
@@ -425,7 +458,7 @@ if __name__ == "__main__":
 
     hostname = ""
     while len(hostname) == 0:
-        hostname = input("Enter hostname of new switch: ")
+        hostname = input("Enter hostname of new switch: ").upper()
 
     outputfile = ""
     while len(outputfile) == 0:
@@ -436,8 +469,9 @@ if __name__ == "__main__":
     # Trying to give it a legit file strangely invokes an error later on...
     newconfig = CiscoConfParse(os.tmpfile(), factory=True)
 
-    full = input("Generate full config file?[Y|n] ").lower()
-    if not "n" in full:
+    createconfig = (not "n" in input(
+        "Generate full config file?[Y|n]: ").lower())
+    if createconfig:
         baseconfig = ".txt"
         if (switch_type == len(switch_models) - 1):
             baseconfig = "baseconfig.txt"
@@ -449,17 +483,22 @@ if __name__ == "__main__":
         newconfig.append_line("!")
         newconfig.commit()
 
-    migrate_ports(oldconfig, newconfig, hostname)
-    vlans = vlan_extract(oldconfig, newconfig, ("n" in full))
-
+    blades, nojacks, newjacks = migrate_ports(
+        oldconfig, newconfig, hostname)
+    if switch_models[switch_type] == "4506":
+        blades = set(xrange(0, 7))  # Blades CAN be left empty, so there's that
+    vlans = vlan_extract(oldconfig, newconfig, createconfig)
+    setup_feeds(newconfig, switch_type, blades, vlans)
     print("Available voice VLANs:")
-    vv = [v for v in vlans if v[0] == "1" and len(v) == 3]
+    vv = oldconfig.find_objects(r"^vlan 1\d\d$")
+    # vv = [v for v in vlans if v[0] == "1" and len(v) == 3]
     skipvoice = False
     if len(vv) > 1:
         voicevlan = ""
         while len(voicevlan) == 0:
             for v, num in zip(vv, xrange(1, len(vv) + 1)):
-                print(" [" + str(num) + "]", v)
+                print(" [" + str(num) + "]", v.text.split()
+                      [-1], "-", v.children[0].text.split()[1:])
             print(" [0] Skip")
             voicevlan = input("    Enter voice VLAN: ")
             try:
@@ -467,29 +506,29 @@ if __name__ == "__main__":
                     skipvoice = True
                     break
                 else:
-                    voicevlan = vv[int(voicevlan) - 1]
+                    voicevlan = vv[int(voicevlan) - 1].text.split()[-1]
             except:
                 voicevlan = ""
     elif len(vv) == 1:
-        if "n" in input("Only one voice VLAN found: " +
-                        str(vv[0]) + ". Use this?[Y|n] ").lower():
+        if "n" in input("Only one voice VLAN found: " + vv[0].text.split(
+        )[-1] + " - " + str(vv[0].children[0].text.split()[1:]) + ". Use this?[Y|n]: ").lower():
             skipvoice = True
         else:
-            voicevlan = vv[0]
+            voicevlan = vv[0].text.split()[-1]
     else:
         print("No standard voice VLAN detected.")
 
-    if not "n" in full:
+    if createconfig:
         interfaces_for_review(newconfig)
     if not skipvoice:
         add_voice_vlan(voicevlan, newconfig)
 
-    setup_feeds(oldconfig, newconfig, switch_type, vlans)
     trunk_cleanup(newconfig)
     # This must be run AFTER trunk_cleanup()
-    remove_mdix_and_dot1q(newconfig)
+    if not switch_models[switch_type] == "3560":
+        remove_mdix_and_dot1q(newconfig)
 
-    if not "n" in full:
+    if createconfig:
         extract_management(oldconfig, newconfig)
         newconfig.append_line("!")
         with open("./templates/" + baseconfig, "r") as b:
