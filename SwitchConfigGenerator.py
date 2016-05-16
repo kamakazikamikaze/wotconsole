@@ -286,30 +286,32 @@ def interfaces_for_review(newconfig):
     """
     # TODO: Print warnings for ports on the new device that do not have a
     # source jack or have a new one listed
-    PowerInts = newconfig.find_objects_w_child(r"^interf", r"^ power")
-    # print PowerInts
-    if PowerInts:
+    power = newconfig.find_objects_w_child(r"^interf", r"^ power")
+    # print power
+    if power:
         print("\nManually review the following Interfaces for Power settings")
-        for obj in PowerInts:
+        for obj in power:
             print(" ", obj.text)
-    DuplexInts = newconfig.find_objects_w_child(r"^interf", r"^ duplex")
-    if DuplexInts:
+    duplex = newconfig.find_objects_w_child(r"^interf", r"^ duplex")
+    if duplex:
         print("\nManually review the following Interfaces for Duplex settings")
-        for obj in DuplexInts:
+        for obj in duplex:
             print(" ", obj.text)
-    SpeedInts = newconfig.find_objects_w_child(r"^interf", r"^ speed")
-    if SpeedInts:
+    speed = newconfig.find_objects_w_child(r"^interf", r"^ speed")
+    if speed:
         print("\nManually review the following Interfaces for Speed settings")
-        for obj in SpeedInts:
+        for obj in speed:
             print(" ", obj.text)
-    PurgatoryInts = newconfig.find_objects_wo_child(
+    access = newconfig.find_objects_wo_child(
         r"^interf", r"^ switchport mode")
-    PurgatoryInts = [obj for obj in PurgatoryInts if not obj.re_search_children(
+    access = [obj for obj in access if not obj.re_search_children(
         r"^[\s]?shut(down)?$")]
-    if PurgatoryInts:
-        print("\nThese interfaces did not specify Access or Trunk mode.\nManually review the following:")
-        for obj in PurgatoryInts:
+    if access:
+        print("\nThese interfaces did not specify Access or Trunk mode and were set to Access by default.\nManually review the following:")
+        for obj in access:
             print(" ", obj.text)
+        for obj in access:
+            obj.append_to_family(" switchport mode access")
     print("")
 
 
@@ -747,8 +749,8 @@ if __name__ == "__main__":
         vlans = vlan_extract(oldconfig)
     setup_feeds(newconfig, switch_type, blades, vlans)
 
-    if createconfig:
-        interfaces_for_review(newconfig)
+    # if createconfig:
+    interfaces_for_review(newconfig)
     set_voice_vlan(oldconfig)
     trunk_cleanup(newconfig)
     # This must be run AFTER trunk_cleanup()
