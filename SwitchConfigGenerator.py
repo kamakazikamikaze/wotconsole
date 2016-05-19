@@ -375,13 +375,14 @@ def interfaces_for_review(newconfig, nojacks, newjacks):
             obj.append_to_family(" switchport mode access")
 
     if nojacks:
-        print("The following interfaces did not have any jacks specified and will be shut down:")
+        print("\nThe following interfaces did not have any jacks specified and will be shut down:")
         print(condensify_ports(nojacks))
 
     if newjacks:
-        print("The following interfaces appear to have new jacks associated. Please manually configure them:")
+        print("\nThe following interfaces appear to have new jacks associated. Please manually configure them:")
         print(condensify_ports(newjacks))
     print("")
+    newconfig.commit()
 
 
 def add_voice_vlan(voicevlan, newconfig):
