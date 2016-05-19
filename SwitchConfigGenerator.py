@@ -59,7 +59,8 @@ def condensify_ports(ports):
             continue
     grouped = {}
     for key in groups.keys():
-        for k, g in groupby(enumerate(groups[key]), lambda ix: ix[0] - ix[1]):
+        for k, g in groupby(
+                enumerate(sorted(groups[key])), lambda ix: ix[0] - ix[1]):
             try:
                 grouped[key].append(map(itemgetter(1), g))
             except KeyError:
