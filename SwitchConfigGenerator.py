@@ -294,7 +294,7 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                             continue  # Try next cell
                         except KeyError:
                             # We have a valid jack number but it's new
-                            nojacks.append(portname)
+                            newjacks.append(portname)
                             # print(
                             #     "Port",
                             #     portname,
@@ -305,7 +305,7 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                             transferred = True
                             break
                     if not transferred:
-                        newjacks.append(portname)
+                        nojacks.append(portname)
                         # print(
                         #     "Port",
                         #     portname,
