@@ -8,6 +8,8 @@ import warnings
 import re
 from itertools import groupby
 from operator import itemgetter
+import tempfile
+
 
 try:  # Portability for Python 3, though 2to3 would convert it
     input = raw_input
@@ -456,14 +458,14 @@ def trunk_cleanup(newconfig):
                 if Add:
                     TrunkConfigLine = " switchport trunk allowed vlan add " + \
                         ",".join(TrunkNumbers)
-                    obj.replace(
-                        r"^ switchport trunk allowed vlan add ",
+                    child.replace(
+                        r"^ switchport trunk allowed vlan add .*",
                         TrunkConfigLine)
                 else:
                     TrunkConfigLine = " switchport trunk allowed vlan " + \
                         ",".join(TrunkNumbers)
-                    obj.replace(
-                        r"^ (?!add)(switchport trunk allowed vlan )",
+                    child.replace(
+                        r"^ (?!add)switchport trunk allowed vlan .*",
                         TrunkConfigLine)
                 # obj.append_to_family(TrunkConfigLine)
     newconfig.commit()
@@ -712,7 +714,7 @@ def get_switch_model():
     for switch in enumerate(switch_models):
         print(" [" + str(switch[0] + 1) + "]", switch[1])
     switch_type = None
-    while not switch_type in xrange(1, len(switch_models) + 1):
+    while not switch_type in xrange(0, len(switch_models)):
         switch_type = int(
             input("What switch model are you programming? ")) - 1
     return switch_type
@@ -739,7 +741,10 @@ def get_configs():
     oldconfig = CiscoConfParse(config_dir + filename, factory=True)
     # # The new parser needs a file associated with it, so create a throwaway.
     # # Trying to give it a legit file strangely invokes an error later on...
-    newconfig = CiscoConfParse(os.tmpfile(), factory=True)
+    if sys.platform.startswith('win'):
+       newconfig = CiscoConfParse(tempfile.NamedTemporaryFile(dir=output_dir).file, factory=True)
+    else:
+        newconfig = CiscoConfParse(os.tmpfile(), factory=True)
     return oldconfig, newconfig
 
 
