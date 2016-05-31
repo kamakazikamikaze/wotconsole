@@ -553,12 +553,14 @@ def extract_management(oldconfig, newconfig):
         newconfig.append_line(" ip address " + NewIP + " " + NewMask)
         newconfig.append_line(" no ip route-cache")
         newconfig.append_line(" no ip mroute-cache")
+        newconfig.append_line(" no shutdown")
         newconfig.append_line("!")
         newconfig.append_line("ip default-gateway " + NewGateway)
         newconfig.append_line("!")
     else:
         for child in ManagementVlan[0].children:
             newconfig.append_line(child.text)
+        newconfig.append_line(" no shutdown")
         newconfig.append_line("!")
         DefaultGateway = oldconfig.find_objects(r"^ip default-gateway")
         newconfig.append_line("!")

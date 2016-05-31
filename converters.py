@@ -32,7 +32,10 @@ vendors = {
             'vlans': r'^ip dhcp snooping vlan (\d+-?,?)+'
         },
         'surround': '',
-        'child_end': None
+        'child_end': None,
+        'logging': {
+            'server': 'logging host'
+        }
     },
     'aruba': {
         'comment': ';',
@@ -49,7 +52,10 @@ vendors = {
             'vlans': r'^dhcp snooping vlan (\d+-?\s?)+'
         },
         'surround': '"',
-        'child_end': 'exit'
+        'child_end': 'exit',
+        'logging': {
+            'server': 'logging'
+        }
     }
 }
 
