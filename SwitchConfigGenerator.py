@@ -17,6 +17,9 @@ try:  # Portability for Python 3, though 2to3 would convert it
 except NameError:
     pass
 
+# This is a simplified set of models and cannot be expected to cover every
+# case/scenario. Feeds on a 3560X will not match those on a 3560(CX/G). For
+# this reason, the option to override the "legal" feed ports is now available
 feed_ports_regex = {
     "3560": r"Gi?0/11$|Gi?0/12$",
     "3750": r"Gi?[1-7]/0/[1-4]$",
@@ -220,105 +223,112 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
             no_files_found(cutsheet_dir)
         else:
             break
-    for file in filtered_files:
-        wb = openpyxl.load_workbook(cutsheet_dir + file)
-        for ws in wb:
-            if not hostname.lower() in ws["A1"].value.lower():
-                continue  # This isn"t a worksheet for the switch
-            hostnotfound = False
-            for row in ws.rows:
-                try:
-                    portname = row[0].value
-                    if not '/' in portname:
-                        continue  # Ensure the row is for a port
-                    indices = [m.span() for m in re.finditer(r"\d+", portname)]
-                    portname = portname[0:indices[0][
-                        0]] + "/".join([str(int(portname[num[0]:num[1]])) for num in indices])
-                    # This grabs the blade number. re.finditer will look for all digits
-                    # and will be stored in 'm'. m.span will give the index numbers for
-                    # where the match starts (inclusive) and where it ends (exclusive),
-                    # and returns them as tuples. Since the blade is the first number,
-                    # we want the first match. We then get the first number from that
-                    # tuple since it's the index number of the string. You may be asking,
-                    # "wait, aren't the cutsheets configured to only use the first letter
-                    # of the port type, e.g. 'F|G|T'?" Yes, that's how it is currently,
-                    # but since the cutsheet generator was designed by a student and
-                    # edited by students, I have this unwarranted fear of someone changing
-                    # 'T' to 'Te', etc. after I am long gone and this is still in use
-                    blades.add(
-                        int(portname[
-                            [m.span()
-                             for m in re.finditer(r"\d", portname)][0][0]
-                        ])
-                    )
-                    transferred = False
-                    # TODO: Remove `print` statements when `interfaces_for_review`
-                    # is completed
-                    for cell in row:
-                        try:
-                            # Does the host match the one from our config?
-                            if oldhost in jacks[int(cell.value)]["old switch"]:
-                                port = oldconfig.find_interface_objects(
-                                    jacks[int(cell.value)]["old port"])
-                                newconfig.append_line("!")
-                                newconfig.append_line("interface " + portname)
-                                for child in port[0].children:
-                                    newconfig.append_line(child.text)
-                                transferred = True
-                                break  # Got the jack, move to next row
-                            # If not, try loading it
-                            else:
-                                host = jacks[int(cell.value)]["old switch"]
-                                cfg = otherconfigs[
-                                    host] if host in otherconfigs.keys() else None
-                                if cfg:
-                                    port = cfg.find_interface_objects(
+    while True:
+        for file in filtered_files:
+            wb = openpyxl.load_workbook(cutsheet_dir + file)
+            for ws in wb:
+                if not hostname.lower() in ws["A1"].value.lower():
+                    continue  # This isn"t a worksheet for the switch
+                hostnotfound = False
+                for row in ws.rows:
+                    try:
+                        portname = row[0].value
+                        if not '/' in portname:
+                            continue  # Ensure the row is for a port
+                        indices = [m.span() for m in re.finditer(r"\d+", portname)]
+                        portname = portname[0:indices[0][
+                            0]] + "/".join([str(int(portname[num[0]:num[1]])) for num in indices])
+                        # This grabs the blade number. re.finditer will look for all digits
+                        # and will be stored in 'm'. m.span will give the index numbers for
+                        # where the match starts (inclusive) and where it ends (exclusive),
+                        # and returns them as tuples. Since the blade is the first number,
+                        # we want the first match. We then get the first number from that
+                        # tuple since it's the index number of the string. You may be asking,
+                        # "wait, aren't the cutsheets configured to only use the first letter
+                        # of the port type, e.g. 'F|G|T'?" Yes, that's how it is currently,
+                        # but since the cutsheet generator was designed by a student and
+                        # edited by students, I have this unwarranted fear of someone changing
+                        # 'T' to 'Te', etc. after I am long gone and this is still in use
+                        blades.add(
+                            int(portname[
+                                [m.span()
+                                 for m in re.finditer(r"\d", portname)][0][0]
+                            ])
+                        )
+                        transferred = False
+                        # TODO: Remove `print` statements when `interfaces_for_review`
+                        # is completed
+                        for cell in row:
+                            try:
+                                # Does the host match the one from our config?
+                                if oldhost in jacks[int(cell.value)]["old switch"]:
+                                    port = oldconfig.find_interface_objects(
                                         jacks[int(cell.value)]["old port"])
                                     newconfig.append_line("!")
-                                    newconfig.append_line(
-                                        "interface " + portname)
+                                    newconfig.append_line("interface " + portname)
                                     for child in port[0].children:
                                         newconfig.append_line(child.text)
                                     transferred = True
-                                    del cfg
                                     break  # Got the jack, move to next row
+                                # If not, try loading it
                                 else:
-                                    raise IOError(
-                                        'Could not find config for', host)
-                        except IOError as e:
-                            print(e)
-                        except IndexError:
-                            print("Could not load configuration for",
-                                  jacks[int(cell.value)]["old port"],
-                                  "from",
-                                  jacks[int(cell.value)]["old switch"])
-                        except (ValueError, TypeError):  # Failures for int() cast
-                            continue  # Try next cell
-                        except KeyError:
-                            # We have a valid jack number but it's new
-                            newjacks.append(portname)
+                                    host = jacks[int(cell.value)]["old switch"]
+                                    cfg = otherconfigs[
+                                        host] if host in otherconfigs.keys() else None
+                                    if cfg:
+                                        port = cfg.find_interface_objects(
+                                            jacks[int(cell.value)]["old port"])
+                                        newconfig.append_line("!")
+                                        newconfig.append_line(
+                                            "interface " + portname)
+                                        for child in port[0].children:
+                                            newconfig.append_line(child.text)
+                                        transferred = True
+                                        del cfg
+                                        break  # Got the jack, move to next row
+                                    else:
+                                        raise IOError(
+                                            'Could not find config for', host)
+                            except IOError as e:
+                                print(e)
+                            except IndexError:
+                                print("Could not load configuration for",
+                                      jacks[int(cell.value)]["old port"],
+                                      "from",
+                                      jacks[int(cell.value)]["old switch"])
+                            except (ValueError, TypeError):  # Failures for int() cast
+                                continue  # Try next cell
+                            except KeyError:
+                                # We have a valid jack number but it's new
+                                newjacks.append(portname)
+                                # print(
+                                #     "Port",
+                                #     portname,
+                                #     "is connected to a new jack. Please configure this manually.")
+                                newconfig.append_line("!")
+                                newconfig.append_line("interface " + portname)
+                                newconfig.append_line(" %%NEW CONNECTION%%")
+                                transferred = True
+                                break
+                        if not transferred:
+                            nojacks.append(portname)
                             # print(
                             #     "Port",
                             #     portname,
-                            #     "is connected to a new jack. Please configure this manually.")
+                            #     "is not connected to a jack and will be shutdown. Please confirm this manually")
                             newconfig.append_line("!")
                             newconfig.append_line("interface " + portname)
-                            newconfig.append_line(" %%NEW CONNECTION%%")
-                            transferred = True
-                            break
-                    if not transferred:
-                        nojacks.append(portname)
-                        # print(
-                        #     "Port",
-                        #     portname,
-                        #     "is not connected to a jack and will be shutdown. Please confirm this manually")
-                        newconfig.append_line("!")
-                        newconfig.append_line("interface " + portname)
-                        newconfig.append_line(" shutdown")
-                except TypeError:
-                    continue
-    if hostnotfound:
-        raise Exception("No 'To Be' cutsheet found! Exiting...")
+                            newconfig.append_line(" shutdown")
+                    except TypeError:
+                        continue
+            del wb
+        if hostnotfound:
+            print("A To-be cutsheet for the switch", hostname, "was not found!")
+            print("If you need to modify the workbooks, make the changes before responding.")
+            if "n" in force_user_input("Would you like to retry? ", r"[Yy][EeSs]*|[Nn][Oo]?").lower():
+                sys.exit("Aborting...")
+        else:
+            break
     newconfig.commit()
     del otherconfigs
     if switch_models[switch_type] == "4506":
@@ -504,16 +514,18 @@ def access_cleanup(newconfig):
         for child in obj.children:
             if r"switchport trunk" in child.text:
                 child.delete()
+            child.replace(r"spanning\-tree\sportfast\sedge.*", "spanning-tree portfast")
     newconfig.commit()
     # I found that some configs are missing the "mode access", so I am also
     # applying to any that are missing "switchport mode"
-    AccessInts = newconfig.find_objects_wo_child(
-        r"^interf", r"^ switchport mode")
-    for obj in AccessInts:
-        for child in obj.children:
-            if r"switchport trunk" in child.text:
-                child.delete()
-    newconfig.commit()
+    # AccessInts = newconfig.find_objects_wo_child(
+    #     r"^interf", r"^ switchport mode")
+    # for obj in AccessInts:
+    #     for child in obj.children:
+    #         if r"switchport trunk" in child.text:
+    #             child.delete()
+    #         child.replace_children(r"spanning\-tree\sportfast\sedge.*", "spanning-tree portfast")
+    # newconfig.commit()
 
 
 def extract_management(oldconfig, newconfig):
@@ -541,35 +553,92 @@ def extract_management(oldconfig, newconfig):
     newconfig.commit()
     # TODO: Prompt user for any additional configuration to include
     ManagementVlan = oldconfig.find_objects_w_child(
-        r"^interface Vlan", r"^ ip address")
+        r"^interface Vlan3\d{2}", r"^ ip address")
     # print(ManagementVlan)
+    if len(ManagementVlan) > 1:
+        print("Several VLANs were found with IP configuration. (Is this from a router?)")
+        print("The following were found:")
+        ok = False
+        while not ok:
+            for option, vlan in zip(xrange(1, len(ManagementVlan) + 1), ManagementVlan):
+                print(' [' + str(option) + ']', vlan.text)
+            choice = None
+            while not choice in xrange(1, len(ManagementVlan) + 1):
+                try:
+                    choice = int(input("Please select a source VLAN for management: "))
+                except:
+                    pass
+            choice -= 1 # Remember: We're enumerating from 1, so cut the index back
+            print(ManagementVlan[choice].text)
+            for child in ManagementVlan[choice].children:
+                print(child.text)
+            ok = True if 'y' in input("Is this correct?[y|N]: ").lower() else False
+    else:
+        choice = 0
+    mgmt = ManagementVlan[choice]
     newconfig.append_line("!")
-    newconfig.append_line(ManagementVlan[0].text)
+    newconfig.append_line(mgmt.text)
     if "n" in input(
             "Will this equipment use the same IP address?[Y|n]: ").lower():
-        NewIP = input("Enter new IP address: ")
-        NewGateway = input("Enter new Gateway: ")
-        NewMask = input("Enter new subnet Mask: ")
-        newconfig.append_line(" ip address " + NewIP + " " + NewMask)
+        while True:
+            newip = force_user_input("Enter new IP address: ", r'(\d{1,3}\.){3}\d{1,3}')
+            newgate = force_user_input("Enter new Gateway: ", r'(\d{1,3}\.){3}\d{1,3}')
+            newmask = force_user_input("Enter new subnet Mask: ", r'(\d{1,3}\.){3}\d{1,3}')
+            print(" IP     :", newip)
+            print(" Gateway:", newgate)
+            print(" Mask   :", newmask)
+            if is_ip(newip) and is_ip(newgate) and is_ip(newmask):
+                if 'y' in force_user_input("Is this correct? ", r"[Yy][EeSs]*|[Nn][Oo]?").lower():
+                    break
+            else:
+                print("One of the addresses is not a valid IP format!")
+        newconfig.append_line(" ip address " + newip + " " + newmask)
         newconfig.append_line(" no ip route-cache")
         newconfig.append_line(" no ip mroute-cache")
         newconfig.append_line(" no shutdown")
         newconfig.append_line("!")
-        newconfig.append_line("ip default-gateway " + NewGateway)
+        newconfig.append_line("ip default-gateway " + newgate)
         newconfig.append_line("!")
     else:
-        for child in ManagementVlan[0].children:
-            newconfig.append_line(child.text)
+        for child in mgmt.children:
+            if 'ip address' in child.text:
+                newconfig.append_line(child.text)
+        newconfig.append_line(" no ip route-cache")
+        newconfig.append_line(" no ip mroute-cache")
         newconfig.append_line(" no shutdown")
         newconfig.append_line("!")
-        DefaultGateway = oldconfig.find_objects(r"^ip default-gateway")
         newconfig.append_line("!")
-        newconfig.append_line(DefaultGateway[0].text)
+        DefaultGateway = oldconfig.find_objects(r"^ip default-gateway")
+        if len(DefaultGateway) > 1:
+            print("Several default gateway commands discovered (WHAT?!)")
+            print("The following were found:")
+            while True:
+                for option, gate in zip(xrange(1, len(DefaultGateway) + 1), DefaultGateway):
+                    print(' [' + str(option) + ']', gate.text)
+                choice = None
+                while not choice in xrange(1, len(DefaultGateway) + 1):
+                    try:
+                        choice = int(force_user_input("Please select the default gateway: "))
+                    except:
+                        pass
+                choice -= 1 # Remember: We're enumerating from 1, so cut the index back
+                print(DefaultGateway[choice].text)
+                if 'y' in input("Is this correct?[y|N]: ").lower():
+                    break
+            newconfig.append_line(DefaultGateway[choice].text)
+        elif len(DefaultGateway) == 0:
+            while True:
+                newgate = force_user_input("No default gateway found. Please type it here: ")
+                if is_ip(newgate):
+                    newconfig.append_line("ip default-gateway " + newgate)
+                    break
+        else:
+            newconfig.append_line(DefaultGateway[0].text)
         newconfig.append_line("!")
     # Only the 4506 uses the following line, but it will be ignored on other
     # devices anyways, so we"ll just leave it here
     newconfig.append_line("ip tacacs source-interface " +
-                          ManagementVlan[0].text.split()[-1])
+                          mgmt.text.split()[-1])
     newconfig.commit()
 
 
@@ -603,12 +672,11 @@ def setup_feeds(newconfig, switch_type, blades, vlans):
     if "y" in input(
             "\nWould you like to set up feedports?[y|N]: ").lower():
         try:
-            finished = False
             print("When you are finished, type 'no' for the feedport name")
             print("(Use 'T' or 'G' instead of 'Ten' or 'Gig'!)")
-            while not finished:
-                feedport = force_user_input("Feedport name: ").upper()
-                if not feedport.lower() == "no":
+            while True:
+                feedport = input("Feedport name: ").upper()
+                if feedport and not feedport.lower() == "no":
                     blade = int(feedport[
                         [m.span() for m in re.finditer(r"\d", feedport)][0][0]
                     ])
@@ -637,8 +705,29 @@ def setup_feeds(newconfig, switch_type, blades, vlans):
                     else:
                         print(
                             "That is an invalid port. Either the spelling is wrong or the numbering is out of range!")
+                        if 'y' in input("Would you like to use it anyways?[y|N]: ").lower():
+                            exists = newconfig.find_objects(
+                            r"^interface " + feedport.strip())
+                            if len(exists) > 1:
+                                print("Uh, your interface matches several others:")
+                                for each in exists:
+                                    print(" ", each.text)
+                                print("Abandoning changes...")
+                            elif len(exists) == 1:
+                                existing = exists[0]
+                                print("Interface already exists!")
+                                print(existing.text)
+                                for line in existing.children:
+                                    print(line.text)
+                                if "y" in input("Overwrite?[y|N]: ").lower():
+                                    for child in existing.children:
+                                        child.delete()
+                                    newconfig.commit()
+                                    _setup_feed(newconfig, feedport, switch_type)
+                            else:
+                                _setup_feed(newconfig, feedport, switch_type)
                 else:
-                    finished = True
+                    break
         except Exception as e:
             print("Exception:", e)
 
@@ -728,18 +817,16 @@ def get_configs():
 
     Returns two CiscoConfParse objects: the old config file, and a new config
     """
-    while True:
-        directory = sorted([x for x in os.listdir(config_dir) if "confg" in x])
-        if not directory:
-            no_files_found(config_dir)
-        for item in enumerate(directory):
-            print(" [" + str(item[0] + 1) + "]", item[1])
-        name = None
-        while not name in xrange(1, len(directory) + 1):
-            name = int(
-                input("Please select the file number of the old config: "))
-        filename = directory[name - 1]
-        break
+    directory = sorted([x for x in os.listdir(config_dir) if "confg" in x])
+    if not directory:
+        no_files_found(config_dir)
+    for item in enumerate(directory):
+        print(" [" + str(item[0] + 1) + "]", item[1])
+    name = None
+    while not name in xrange(1, len(directory) + 1):
+        name = int(
+            input("Please select the file number of the old config: "))
+    filename = directory[name - 1]
     oldconfig = CiscoConfParse(config_dir + filename, factory=True)
     # # The new parser needs a file associated with it, so create a throwaway.
     # # Trying to give it a legit file strangely invokes an error later on...
@@ -750,17 +837,23 @@ def get_configs():
     return oldconfig, newconfig
 
 
-def force_user_input(display):
+def force_user_input(display, expect=r""):
     """Enforce that the user input at least one character
 
     Keyword arguments:
     display -- the string to display as the input prompt
+    expect -- a regex string representing the required format of the response before returning to caller. Defaults to an empty string (match any)
 
     Returns user input string
     """
     name = ""
-    while len(name) == 0:
+    ok = False
+    while len(name) == 0 and not ok:
         name = input(display)
+        if re.match(expect, name):
+            ok = True
+        else:
+            name = ""
     return name
 
 
@@ -814,6 +907,10 @@ def no_files_found(directory):
     else:
         sys.exit("Exiting configuration generator")
 
+
+def is_ip(addr):
+    return True if re.match(r'(\d{1,3}\.){3}\d{1,3}', addr.strip()) else False
+
     # This module is designed to allow running it from a CLI or importing it and calling
     # its functions, however it revolves mostly around Layer 2 device
     # configuration
@@ -847,6 +944,7 @@ if __name__ == "__main__":
     # if createconfig:
     interfaces_for_review(newconfig, nojacks, newjacks)
     set_voice_vlan(oldconfig)
+    access_cleanup(newconfig)
     trunk_cleanup(newconfig)
     # This must be run AFTER trunk_cleanup()
     if not switch_models[switch_type] == "3560":
