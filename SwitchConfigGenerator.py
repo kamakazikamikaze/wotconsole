@@ -6,6 +6,7 @@ import openpyxl
 from ciscoconfparse import CiscoConfParse
 import warnings
 import re
+from natsort import natsorted
 from itertools import groupby
 from operator import itemgetter
 import tempfile
@@ -83,29 +84,82 @@ def condensify_ports(ports):
     return condensed
 
 
-def vlan_extract(oldconfig, newconfig=None):
+def vlan_extract(oldconfig, newconfig, regex, genconfig=False):
     """Retrieve all VLANs from the old configuration file
-    The user may specifiy pass a CiscoConfParse object if a full config is to be made or omit it if only a list of VLANs is desired.
+    Automatically detects if certain VLANs will not be used and will offer to prune them.
+    Note that for pruning to work, this _must_ be called before `setup_feeds`.
 
     Keyword arguments:
     oldconfig -- CiscoConfParse object of existing configuration file
     newconfig -- CiscoConfParse object, representing the "new" config file; defaults to None
+    regex -- regex string used to determine if port is a feed
+    genconfig -- boolean representing if a full config will be generated:
+    If True, all VLANs will be defined in the new config file. Defaults to False
 
     Returns:
-    vlans -- a list of all VLANs defined
+    vlans -- a sorted list of all VLANs defined
     """
     vlans = []
     AllVlanObjects = oldconfig.find_objects(r"^vlan \d+")
     for obj in AllVlanObjects:
-        vlans.append(obj.text.split()[-1])
-        if newconfig:
+        # vlans.append(obj.text.split()[-1])
+        vlan = obj.text.split()[-1]
+        usedby = newconfig.find_objects_w_child(
+            r"^interface [FfGgTt]\d", r"vlan.*" + vlan)
+        usedby = [u for u in usedby if not u.re_match(regex, 0)]
+        vlanname = obj.re_search_children(r"name")
+        vlanname = vlanname[0].text.split()[-1] if vlanname else "No Name!"
+        if not usedby and 'y' in input(
+                "VLAN " + vlan + " (" + vlanname + ") is not used by any interface. Remove?[y|N]: ").lower():
+            continue
+        else:
+            vlans.append(vlan)
+        if genconfig:
             newconfig.append_line("!")
             newconfig.append_line(obj.text)
             for child in obj.children:
                 newconfig.append_line(child.text)
-    if newconfig:
+    if genconfig:
         newconfig.commit()
-    return vlans
+    return natsorted(vlans, key=lambda x: x.lower())
+
+
+# def prune_unused_vlans(newconfig, vlans, regex):
+#     """
+#     Remove VLANs that do not appear to be used by any ports
+
+#     Keyword arguments:
+#     newconfig -- a CiscoConfParse object of the new device
+#     vlans -- a list of strings representing VLAN numbers
+#     regex -- regex string that matches the model's feedports
+#     """
+#     toremove = set()
+#     for v in vlans:
+#         usedby = newconfig.find_objects_w_child(
+#             r"^interface [FfGgTt]\d", r"vlan.*" + v)
+#         usedby = [u for u in usedby if not u.re_match(regex, 0)]
+#         if not usedby:
+#             toremove.add(v)
+#     notremoved = set()
+#     for v in toremove:
+#         vlan = newconfig.find_objects(r"^vlan " + v + r"$")[0]
+#         if 'y' in input(
+#                 "VLAN " + v + " is not used by any interface. Remove?[y|N]: ").lower():
+#             vlan.delete()
+#             newconfig.commit()
+#         else:
+#             notremoved.add(v)
+#     toremove -= notremoved
+#     if toremove:
+#         vlans = natsorted(list(set(vlans) - toremove), key=lambda x: x.lower())
+#         feedports = newconfig.find_interface_objects(regex)
+#         for feed in feedports:
+#             allowed = feed.re_search_children(r"allowed vlan")
+#             for child in allowed:
+#                 v = list(set(child.text.split()[-1].split(",")) - toremove)
+#                 child.re_sub(r"(\d+,?)+", ','.join(v))
+#     newconfig.commit()
+#     return vlans
 
 
 def add_snooping(newconfig, vlans):
@@ -235,7 +289,8 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                         portname = row[0].value
                         if not '/' in portname:
                             continue  # Ensure the row is for a port
-                        indices = [m.span() for m in re.finditer(r"\d+", portname)]
+                        indices = [m.span()
+                                   for m in re.finditer(r"\d+", portname)]
                         portname = portname[0:indices[0][
                             0]] + "/".join([str(int(portname[num[0]:num[1]])) for num in indices])
                         # This grabs the blade number. re.finditer will look for all digits
@@ -261,11 +316,13 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                         for cell in row:
                             try:
                                 # Does the host match the one from our config?
-                                if oldhost in jacks[int(cell.value)]["old switch"]:
+                                if oldhost in jacks[int(cell.value)][
+                                        "old switch"]:
                                     port = oldconfig.find_interface_objects(
                                         jacks[int(cell.value)]["old port"])
                                     newconfig.append_line("!")
-                                    newconfig.append_line("interface " + portname)
+                                    newconfig.append_line(
+                                        "interface " + portname)
                                     for child in port[0].children:
                                         newconfig.append_line(child.text)
                                     transferred = True
@@ -323,9 +380,14 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                         continue
             del wb
         if hostnotfound:
-            print("A To-be cutsheet for the switch", hostname, "was not found!")
-            print("If you need to modify the workbooks, make the changes before responding.")
-            if "n" in force_user_input("Would you like to retry? ", r"[Yy][EeSs]*|[Nn][Oo]?").lower():
+            print(
+                "A To-be cutsheet for the switch",
+                hostname,
+                "was not found!")
+            print(
+                "If you need to modify the workbooks, make the changes before responding.")
+            if "n" in force_user_input(
+                    "Would you like to retry? ", r"[Yy][EeSs]*|[Nn][Oo]?").lower():
                 sys.exit("Aborting...")
         else:
             break
@@ -463,7 +525,11 @@ def trunk_cleanup(newconfig):
             TrunkNumbers = set(child.text.split()[-1].split(","))
             NumsToRemove = set(
                 ["1", "1002-1005", "1002", "1003", "1004", "1005"])
-            TrunkNumbers = list(TrunkNumbers - NumsToRemove)
+            TrunkNumbers = natsorted(
+                list(
+                    TrunkNumbers -
+                    NumsToRemove),
+                lambda x: x.lower())
             if len(TrunkNumbers) > 0:
                 if Add:
                     TrunkConfigLine = " switchport trunk allowed vlan add " + \
@@ -514,7 +580,9 @@ def access_cleanup(newconfig):
         for child in obj.children:
             if r"switchport trunk" in child.text:
                 child.delete()
-            child.replace(r"spanning\-tree\sportfast\sedge.*", "spanning-tree portfast")
+            child.replace(
+                r"spanning\-tree\sportfast\sedge.*",
+                "spanning-tree portfast")
     newconfig.commit()
     # I found that some configs are missing the "mode access", so I am also
     # applying to any that are missing "switchport mode"
@@ -555,91 +623,111 @@ def extract_management(oldconfig, newconfig):
     ManagementVlan = oldconfig.find_objects_w_child(
         r"^interface Vlan3\d{2}", r"^ ip address")
     # print(ManagementVlan)
-    if len(ManagementVlan) > 1:
-        print("Several VLANs were found with IP configuration. (Is this from a router?)")
-        print("The following were found:")
-        ok = False
-        while not ok:
-            for option, vlan in zip(xrange(1, len(ManagementVlan) + 1), ManagementVlan):
-                print(' [' + str(option) + ']', vlan.text)
-            choice = None
-            while not choice in xrange(1, len(ManagementVlan) + 1):
-                try:
-                    choice = int(input("Please select a source VLAN for management: "))
-                except:
-                    pass
-            choice -= 1 # Remember: We're enumerating from 1, so cut the index back
-            print(ManagementVlan[choice].text)
-            for child in ManagementVlan[choice].children:
-                print(child.text)
-            ok = True if 'y' in input("Is this correct?[y|N]: ").lower() else False
+    if not ManagementVlan:
+        print("No management VLAN defined!")
+        print("Please verify and manually fix later.")
+        # if not 'n' in input("Would you like to create one?[Y|n]: ").lower():
+        #    vnum = force_user_input("VLAN number: ",r"3\d{2}")
     else:
-        choice = 0
-    mgmt = ManagementVlan[choice]
-    newconfig.append_line("!")
-    newconfig.append_line(mgmt.text)
-    if "n" in input(
-            "Will this equipment use the same IP address?[Y|n]: ").lower():
-        while True:
-            newip = force_user_input("Enter new IP address: ", r'(\d{1,3}\.){3}\d{1,3}')
-            newgate = force_user_input("Enter new Gateway: ", r'(\d{1,3}\.){3}\d{1,3}')
-            newmask = force_user_input("Enter new subnet Mask: ", r'(\d{1,3}\.){3}\d{1,3}')
-            print(" IP     :", newip)
-            print(" Gateway:", newgate)
-            print(" Mask   :", newmask)
-            if is_ip(newip) and is_ip(newgate) and is_ip(newmask):
-                if 'y' in force_user_input("Is this correct? ", r"[Yy][EeSs]*|[Nn][Oo]?").lower():
-                    break
-            else:
-                print("One of the addresses is not a valid IP format!")
-        newconfig.append_line(" ip address " + newip + " " + newmask)
-        newconfig.append_line(" no ip route-cache")
-        newconfig.append_line(" no ip mroute-cache")
-        newconfig.append_line(" no shutdown")
-        newconfig.append_line("!")
-        newconfig.append_line("ip default-gateway " + newgate)
-        newconfig.append_line("!")
-    else:
-        for child in mgmt.children:
-            if 'ip address' in child.text:
-                newconfig.append_line(child.text)
-        newconfig.append_line(" no ip route-cache")
-        newconfig.append_line(" no ip mroute-cache")
-        newconfig.append_line(" no shutdown")
-        newconfig.append_line("!")
-        newconfig.append_line("!")
-        DefaultGateway = oldconfig.find_objects(r"^ip default-gateway")
-        if len(DefaultGateway) > 1:
-            print("Several default gateway commands discovered (WHAT?!)")
+        if len(ManagementVlan) > 1:
+            print(
+                "Several VLANs were found with IP configuration. (Is this from a router?)")
             print("The following were found:")
-            while True:
-                for option, gate in zip(xrange(1, len(DefaultGateway) + 1), DefaultGateway):
-                    print(' [' + str(option) + ']', gate.text)
+            ok = False
+            while not ok:
+                for option, vlan in zip(
+                        xrange(1, len(ManagementVlan) + 1), ManagementVlan):
+                    print(' [' + str(option) + ']', vlan.text)
                 choice = None
-                while not choice in xrange(1, len(DefaultGateway) + 1):
+                while not choice in xrange(1, len(ManagementVlan) + 1):
                     try:
-                        choice = int(force_user_input("Please select the default gateway: "))
+                        choice = int(
+                            input("Please select a source VLAN for management: "))
                     except:
                         pass
-                choice -= 1 # Remember: We're enumerating from 1, so cut the index back
-                print(DefaultGateway[choice].text)
-                if 'y' in input("Is this correct?[y|N]: ").lower():
-                    break
-            newconfig.append_line(DefaultGateway[choice].text)
-        elif len(DefaultGateway) == 0:
-            while True:
-                newgate = force_user_input("No default gateway found. Please type it here: ")
-                if is_ip(newgate):
-                    newconfig.append_line("ip default-gateway " + newgate)
-                    break
+                choice -= 1  # Remember: We're enumerating from 1, so cut the index back
+                print(ManagementVlan[choice].text)
+                for child in ManagementVlan[choice].children:
+                    print(child.text)
+                ok = True if 'y' in input(
+                    "Is this correct?[y|N]: ").lower() else False
         else:
-            newconfig.append_line(DefaultGateway[0].text)
+            choice = 0
+        mgmt = ManagementVlan[choice]
         newconfig.append_line("!")
-    # Only the 4506 uses the following line, but it will be ignored on other
-    # devices anyways, so we"ll just leave it here
-    newconfig.append_line("ip tacacs source-interface " +
-                          mgmt.text.split()[-1])
-    newconfig.commit()
+        newconfig.append_line(mgmt.text)
+        if "n" in input(
+                "Will this equipment use the same IP address?[Y|n]: ").lower():
+            while True:
+                newip = force_user_input(
+                    "Enter new IP address: ",
+                    r'(\d{1,3}\.){3}\d{1,3}')
+                newgate = force_user_input(
+                    "Enter new Gateway: ",
+                    r'(\d{1,3}\.){3}\d{1,3}')
+                newmask = force_user_input(
+                    "Enter new subnet Mask: ",
+                    r'(\d{1,3}\.){3}\d{1,3}')
+                print(" IP     :", newip)
+                print(" Gateway:", newgate)
+                print(" Mask   :", newmask)
+                if is_ip(newip) and is_ip(newgate) and is_ip(newmask):
+                    if 'y' in force_user_input(
+                            "Is this correct? ", r"[Yy][EeSs]*|[Nn][Oo]?").lower():
+                        break
+                else:
+                    print("One of the addresses is not a valid IP format!")
+            newconfig.append_line(" ip address " + newip + " " + newmask)
+            newconfig.append_line(" no ip route-cache")
+            newconfig.append_line(" no ip mroute-cache")
+            newconfig.append_line(" no shutdown")
+            newconfig.append_line("!")
+            newconfig.append_line("ip default-gateway " + newgate)
+            newconfig.append_line("!")
+        else:
+            for child in mgmt.children:
+                if 'ip address' in child.text:
+                    newconfig.append_line(child.text)
+            newconfig.append_line(" no ip route-cache")
+            newconfig.append_line(" no ip mroute-cache")
+            newconfig.append_line(" no shutdown")
+            newconfig.append_line("!")
+            newconfig.append_line("!")
+            DefaultGateway = oldconfig.find_objects(r"^ip default-gateway")
+            if len(DefaultGateway) > 1:
+                print("Several default gateway commands discovered (WHAT?!)")
+                print("The following were found:")
+                while True:
+                    for option, gate in zip(
+                            xrange(1, len(DefaultGateway) + 1), DefaultGateway):
+                        print(' [' + str(option) + ']', gate.text)
+                    choice = None
+                    while not choice in xrange(1, len(DefaultGateway) + 1):
+                        try:
+                            choice = int(
+                                force_user_input("Please select the default gateway: "))
+                        except:
+                            pass
+                    choice -= 1  # Remember: We're enumerating from 1, so cut the index back
+                    print(DefaultGateway[choice].text)
+                    if 'y' in input("Is this correct?[y|N]: ").lower():
+                        break
+                newconfig.append_line(DefaultGateway[choice].text)
+            elif len(DefaultGateway) == 0:
+                while True:
+                    newgate = force_user_input(
+                        "No default gateway found. Please type it here: ")
+                    if is_ip(newgate):
+                        newconfig.append_line("ip default-gateway " + newgate)
+                        break
+            else:
+                newconfig.append_line(DefaultGateway[0].text)
+            newconfig.append_line("!")
+        # Only the 4506 uses the following line, but it will be ignored on other
+        # devices anyways, so we"ll just leave it here
+        newconfig.append_line("ip tacacs source-interface " +
+                              mgmt.text.split()[-1])
+        newconfig.commit()
 
 
 def file_export(outputfile, newconfig):
@@ -705,9 +793,10 @@ def setup_feeds(newconfig, switch_type, blades, vlans):
                     else:
                         print(
                             "That is an invalid port. Either the spelling is wrong or the numbering is out of range!")
-                        if 'y' in input("Would you like to use it anyways?[y|N]: ").lower():
+                        if 'y' in input(
+                                "Would you like to use it anyways?[y|N]: ").lower():
                             exists = newconfig.find_objects(
-                            r"^interface " + feedport.strip())
+                                r"^interface " + feedport.strip())
                             if len(exists) > 1:
                                 print("Uh, your interface matches several others:")
                                 for each in exists:
@@ -723,7 +812,8 @@ def setup_feeds(newconfig, switch_type, blades, vlans):
                                     for child in existing.children:
                                         child.delete()
                                     newconfig.commit()
-                                    _setup_feed(newconfig, feedport, switch_type)
+                                    _setup_feed(
+                                        newconfig, feedport, switch_type)
                             else:
                                 _setup_feed(newconfig, feedport, switch_type)
                 else:
@@ -831,7 +921,9 @@ def get_configs():
     # # The new parser needs a file associated with it, so create a throwaway.
     # # Trying to give it a legit file strangely invokes an error later on...
     if sys.platform.startswith('win'):
-       newconfig = CiscoConfParse(tempfile.NamedTemporaryFile(dir=output_dir).file, factory=True)
+        newconfig = CiscoConfParse(
+            tempfile.NamedTemporaryFile(
+                dir=output_dir).file, factory=True)
     else:
         newconfig = CiscoConfParse(os.tmpfile(), factory=True)
     return oldconfig, newconfig
@@ -918,7 +1010,9 @@ if __name__ == "__main__":
     oldconfig, newconfig = get_configs()
     switch_type = get_switch_model()
     hostname = force_user_input("Enter hostname of new switch: ").upper()
-    outputfile = force_user_input("Enter output file name: ")
+    outputfile = input(
+        "Enter output file name (default - " + hostname + ".txt): ")
+    outputfile = outputfile if outputfile else hostname + ".txt"
     createconfig = (not "n" in input(
         "Generate full config file?[Y|n]: ").lower())
     if createconfig:
@@ -935,10 +1029,14 @@ if __name__ == "__main__":
         oldconfig, newconfig, hostname, switch_type)
     # Add ip dhcp snooping later: adding it immediately after interfaces
     # causes a bug if trying to use file as startup-config
-    if createconfig:
-        vlans = vlan_extract(oldconfig, newconfig)
-    else:
-        vlans = vlan_extract(oldconfig)
+    # if createconfig:
+    #     vlans = vlan_extract(oldconfig, feed_ports_regex[
+    #         switch_models[switch_type]], newconfig)
+    # else:
+    #     vlans = vlan_extract(oldconfig, feed_ports_regex[
+    #         switch_models[switch_type]])
+    vlans = vlan_extract(oldconfig, newconfig, feed_ports_regex[
+        switch_models[switch_type]], createconfig)
     setup_feeds(newconfig, switch_type, blades, vlans)
 
     # if createconfig:
@@ -951,6 +1049,9 @@ if __name__ == "__main__":
         remove_mdix_and_dot1q(newconfig)
 
     if createconfig:
+        # vlans = prune_unused_vlans(
+        #     newconfig, vlans, feed_ports_regex[
+        #         switch_models[switch_type]])
         extract_management(oldconfig, newconfig)
         add_snooping(newconfig, vlans)
         newconfig.append_line("!")
