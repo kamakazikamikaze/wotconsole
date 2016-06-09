@@ -100,8 +100,9 @@ def vlan_extract(oldconfig, newconfig, regex, genconfig=False):
     vlans -- a sorted list of all VLANs defined
     """
     vlans = []
-    AllVlanObjects = oldconfig.find_objects(r"^vlan \d+")
-    for obj in AllVlanObjects:
+    allvlans = oldconfig.find_objects(r"^vlan \d+")
+    allvlans.reverse()
+    for obj in allvlans:
         # vlans.append(obj.text.split()[-1])
         vlan = obj.text.split()[-1]
         usedby = newconfig.find_objects_w_child(
@@ -115,51 +116,17 @@ def vlan_extract(oldconfig, newconfig, regex, genconfig=False):
         else:
             vlans.append(vlan)
         if genconfig:
-            newconfig.append_line("!")
-            newconfig.append_line(obj.text)
+            newconfig.prepend_line("!")
             for child in obj.children:
-                newconfig.append_line(child.text)
+                newconfig.prepend_line(child.text)
+            newconfig.prepend_line(obj.text)
+            # newconfig.append_line("!")
+            # newconfig.append_line(obj.text)
+            # for child in obj.children:
+            #     newconfig.append_line(child.text)
     if genconfig:
         newconfig.commit()
     return natsorted(vlans, key=lambda x: x.lower())
-
-
-# def prune_unused_vlans(newconfig, vlans, regex):
-#     """
-#     Remove VLANs that do not appear to be used by any ports
-
-#     Keyword arguments:
-#     newconfig -- a CiscoConfParse object of the new device
-#     vlans -- a list of strings representing VLAN numbers
-#     regex -- regex string that matches the model's feedports
-#     """
-#     toremove = set()
-#     for v in vlans:
-#         usedby = newconfig.find_objects_w_child(
-#             r"^interface [FfGgTt]\d", r"vlan.*" + v)
-#         usedby = [u for u in usedby if not u.re_match(regex, 0)]
-#         if not usedby:
-#             toremove.add(v)
-#     notremoved = set()
-#     for v in toremove:
-#         vlan = newconfig.find_objects(r"^vlan " + v + r"$")[0]
-#         if 'y' in input(
-#                 "VLAN " + v + " is not used by any interface. Remove?[y|N]: ").lower():
-#             vlan.delete()
-#             newconfig.commit()
-#         else:
-#             notremoved.add(v)
-#     toremove -= notremoved
-#     if toremove:
-#         vlans = natsorted(list(set(vlans) - toremove), key=lambda x: x.lower())
-#         feedports = newconfig.find_interface_objects(regex)
-#         for feed in feedports:
-#             allowed = feed.re_search_children(r"allowed vlan")
-#             for child in allowed:
-#                 v = list(set(child.text.split()[-1].split(",")) - toremove)
-#                 child.re_sub(r"(\d+,?)+", ','.join(v))
-#     newconfig.commit()
-#     return vlans
 
 
 def add_snooping(newconfig, vlans):
@@ -405,8 +372,6 @@ def interfaces_for_review(newconfig, nojacks, newjacks):
     Keyword arguments:
     newconfig -- CiscoConfParse object representing the "new" configuration file
     """
-    # TODO: Print warnings for ports on the new device that do not have a
-    # source jack or have a new one listed
     power = newconfig.find_objects_w_child(r"^interf", r"^ power")
     # print power
     if power:
@@ -845,31 +810,30 @@ def _setup_feed(newconfig, feedport, switch_type):
             " switchport trunk allowed vlan " +
             ",".join(vlans))
         exists.append_to_family(" ip dhcp snooping trust")
-    # else:
-    elif newconfig.has_line_with(r"^hostname"):
-        newconfig.insert_after(
-            r"^hostname",
-            " ip dhcp snooping trust")
-        newconfig.insert_after(
-            r"^hostname",
-            " switchport trunk allowed vlan " +
-            ",".join(vlans))
-        newconfig.insert_after(
-            r"^hostname",
-            " switchport mode trunk")
-        if switch_models[switch_type] == "3560":
-            newconfig.insert_after(
-                r"^hostname",
-                " switchport trunk encapsultion dot1q")
-        if "y" in input("Would you like to add a description?[y|N]: ").lower():
-            newconfig.insert_after(
-                r"^hostname",
-                " description " +
-                input("Description: "))
-        newconfig.insert_after(
-            r"^hostname",
-            "interface " + feedport)
-        newconfig.insert_after(r"^hostname", "!")
+    # elif newconfig.has_line_with(r"^hostname"):
+    #     newconfig.insert_after(
+    #         r"^hostname",
+    #         " ip dhcp snooping trust")
+    #     newconfig.insert_after(
+    #         r"^hostname",
+    #         " switchport trunk allowed vlan " +
+    #         ",".join(vlans))
+    #     newconfig.insert_after(
+    #         r"^hostname",
+    #         " switchport mode trunk")
+    #     if switch_models[switch_type] == "3560":
+    #         newconfig.insert_after(
+    #             r"^hostname",
+    #             " switchport trunk encapsultion dot1q")
+    #     if "y" in input("Would you like to add a description?[y|N]: ").lower():
+    #         newconfig.insert_after(
+    #             r"^hostname",
+    #             " description " +
+    #             input("Description: "))
+    #     newconfig.insert_after(
+    #         r"^hostname",
+    #         "interface " + feedport)
+    #     newconfig.insert_after(r"^hostname", "!")
     else:
         newconfig.append_line("!")
         newconfig.append_line("interface " + feedport)
@@ -1015,40 +979,32 @@ if __name__ == "__main__":
     outputfile = outputfile if outputfile else hostname + ".txt"
     createconfig = (not "n" in input(
         "Generate full config file?[Y|n]: ").lower())
+
+    blades, nojacks, newjacks = migrate_ports(
+        oldconfig, newconfig, hostname, switch_type)
+    # Add ip dhcp snooping later: adding it immediately after interfaces
+    # causes a bug if trying to use file as startup-config
+    vlans = vlan_extract(oldconfig, newconfig, feed_ports_regex[
+        switch_models[switch_type]], createconfig)
+    setup_feeds(newconfig, switch_type, blades, vlans)
+    interfaces_for_review(newconfig, nojacks, newjacks)
+    set_voice_vlan(oldconfig)
+    access_cleanup(newconfig)
+    trunk_cleanup(newconfig)
+
+    # This must be run AFTER trunk_cleanup()
+    if not switch_models[switch_type] == "3560":
+        remove_mdix_and_dot1q(newconfig)
     if createconfig:
         baseconfig = ".txt"
         if (switch_type == len(switch_models) - 1):
             baseconfig = "baseconfig.txt"
         else:
             baseconfig = switch_models[switch_type] + "base.txt"
-        newconfig.append_line("!")
-        newconfig.append_line("hostname " + hostname)
-        newconfig.append_line("!")
+        newconfig.prepend_line("!")
+        newconfig.prepend_line("hostname " + hostname)
+        newconfig.prepend_line("!")
         newconfig.commit()
-    blades, nojacks, newjacks = migrate_ports(
-        oldconfig, newconfig, hostname, switch_type)
-    # Add ip dhcp snooping later: adding it immediately after interfaces
-    # causes a bug if trying to use file as startup-config
-    # if createconfig:
-    #     vlans = vlan_extract(oldconfig, feed_ports_regex[
-    #         switch_models[switch_type]], newconfig)
-    # else:
-    #     vlans = vlan_extract(oldconfig, feed_ports_regex[
-    #         switch_models[switch_type]])
-    vlans = vlan_extract(oldconfig, newconfig, feed_ports_regex[
-        switch_models[switch_type]], createconfig)
-    setup_feeds(newconfig, switch_type, blades, vlans)
-
-    # if createconfig:
-    interfaces_for_review(newconfig, nojacks, newjacks)
-    set_voice_vlan(oldconfig)
-    access_cleanup(newconfig)
-    trunk_cleanup(newconfig)
-    # This must be run AFTER trunk_cleanup()
-    if not switch_models[switch_type] == "3560":
-        remove_mdix_and_dot1q(newconfig)
-
-    if createconfig:
         # vlans = prune_unused_vlans(
         #     newconfig, vlans, feed_ports_regex[
         #         switch_models[switch_type]])
