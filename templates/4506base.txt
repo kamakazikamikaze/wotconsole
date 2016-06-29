@@ -103,6 +103,8 @@ interface Vlan1
 
 ip forward-protocol nd
 no ip http server
+no ip http secure-server
+ip ssh version 2
 
 !
 !

@@ -107,6 +107,7 @@ interface Vlan1
 !
 no ip http server
 no ip http secure-server
+ip ssh version 2
 !
 !
 logging trap notifications

@@ -42,12 +42,6 @@ ip dhcp smart-relay
 !
 no setup express
 !
-crypto pki trustpoint TP-self-signed-3288874752
- enrollment selfsigned
- subject-name cn=IOS-Self-Signed-Certificate-3288874752
- revocation-check none
- rsakeypair TP-self-signed-3288874752
-!
 !
 !
 !
@@ -77,7 +71,8 @@ interface Vlan1
 !
 ip classless
 no ip http server
-ip http secure-server
+no ip http secure-server
+ip ssh version 2
 !
 ip sla enable reaction-alerts
 logging trap notifications

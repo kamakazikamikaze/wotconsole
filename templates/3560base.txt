@@ -45,6 +45,7 @@ ip name-server 10.8.0.19
 ip name-server 10.8.0.26
 ip ssh time-out 120
 ip ssh authentication-retries 3
+ip ssh version 2
 vtp mode transparent
 !
 spanning-tree mode rapid-pvst
