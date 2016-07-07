@@ -1,0 +1,119 @@
+configure
+
+!
+! state all vlan numbers, separated by commas
+!
+
+!
+! vlan table with names
+!
+
+hostname ""
+
+!
+! slot unit/slot cardindex
+! the second 'slot' is the mini-SAS port
+! ex: slot 1/0 7   ! Dell Networking N3048P
+!
+
+sntp unicast client enable
+sntp server 10.6.72.7 priority 2
+sntp server 10.3.34.1 priority 3
+sntp server 10.11.16.2
+clock summer-time recurring USA
+clock timezone -7 minutes 0 zone "MST"
+
+stack
+!
+! stack membership
+!
+exit
+
+ip domain-name "dcs.byu.edu"
+ip name-server "10.8.0.19"
+ip name-server "10.8.0.26"
+logging monitor debugging
+logging 10.11.16.53
+port 5520
+description "ELK"
+exit
+logging 10.11.16.21
+port 5506
+description "SEA"
+exit
+logging 10.11.65.20
+exit
+logging traps 5
+
+! Management interfaces
+interface vlan 1
+ip address dhcp
+exit
+!
+interface vlan 3%%
+ip address 10.%.%.% 255.255.255.%
+exit
+ip default-gateway 10.%.%.%
+!
+
+no passwords min-length
+username "admin" password 21232f297a57a5a743894a0e4a801fc3 privilege 15 encrypted
+username "default" password 1eec79d6f59f982e4a04883d8d9792d4 privilege 15 encrypted
+aaa authentication login "defaultList" tacacs local line
+aaa authentication login "login-list" tacacs local
+aaa accounting commands "dfltCmdList" start-stop tacacs
+aaa authorization exec "dfltExecAuthList" tacacs
+aaa authorization commands "dfltCmdAuthList" tacacs
+voice vlan
+tacacs-server host 10.11.64.5
+exit
+tacacs-server host 10.11.64.6
+exit
+tacacs-server timeout 1
+tacacs-server key "o2i0t0i2e"
+line console
+login authentication login-list
+exit
+line telnet
+login authentication login-list
+exit
+line ssh
+login authentication login-list
+exit
+ip ssh server
+spanning-tree mode rapid-pvst
+
+!
+! interfaces
+!
+
+snmp-server engineid local 800002a203f8b1568d4be0
+snmp-server community "OIT" ro
+snmp-server community "expand" ro
+snmp-server community "igo2byu" rw
+snmp-server community "public" rw ipaddress 192.168.1.2
+snmp-server host 10.11.65.20 "OIT" udp-port 10162
+enable password ecc33fd783418ecde0580c500a9f521b encrypted
+banner login " 
+****************************************************************************** 
+                            NOTICE TO USERS 
+ This system is the property of Brigham Young University. 
+ It is for AUTHORIZED use only. Users (authorized or unauthorized) have no 
+ explicit or implicit expectation of privacy. 
+ Any or all uses of this system and access to this system may be 
+ intercepted, monitored, recorded, copied, audited, inspected, and disclosed 
+ to authorized site, Brigham Young University, and law enforcement personnel, 
+ as well as authorized officials of other agencies, both domestic and foreign. 
+ By using this system, the user consents to such interception, monitoring, 
+ recording, copying, auditing, inspection, and disclosure at the discretion of 
+ authorized site or university  personnel. 
+ Unauthorized or improper use of this system may result in administrative 
+ disciplinary action and civil and criminal penalties. By continuing to use 
+ this system you indicate your awareness of a
+nd consent to these terms and
+conditions of use. LOG OFF IMMEDIATELY if you do not agree to the conditions
+stated in this warning.
+******************************************************************************
+"
+service unsupported-transceiver
+exit
