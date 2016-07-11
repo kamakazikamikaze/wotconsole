@@ -22,33 +22,33 @@ except NameError:
 # case/scenario. Feeds on a 3560X will not match those on a 3560(CX/G). For
 # this reason, the option to override the "legal" feed ports is now available
 feed_ports_regex = {
-    "3560": r"Gi?0/11$|Gi?0/12$",
-    "3750": r"Gi?[1-7]/0/[1-4]$",
-    "3850": r"Te?[1-7]/1/[1-4]$|Gi?[1-7]/1/[1-4]$",  # Gig OR TenGig
-    "4506": r"Te?[1-6]/[1-2]$|Gi?[1-6]/[3-6]$"
+    '3560': r'Gi?0/11$|Gi?0/12$',
+    '3750': r'Gi?[1-7]/0/[1-4]$',
+    '3850': r'Te?[1-7]/1/[1-4]$|Gi?[1-7]/1/[1-4]$',  # Gig OR TenGig
+    '4506': r'Te?[1-6]/[1-2]$|Gi?[1-6]/[3-6]$'
 }
 
-switch_models = ["3560", "3750", "3850", "4506", "Other"]
+switch_models = ['3560', '3750', '3850', '4506', 'Other']
 
-cutsheet_dir = "./cutsheets/"
+cutsheet_dir = './cutsheets/'
 
-config_dir = "./configs/"
+config_dir = './configs/'
 
-output_dir = "./output/"
+output_dir = './output/'
 
-template_dir = "./templates/"
+template_dir = './templates/'
 
 
 def condensify_ports(ports):
-    """Turn a collection of ports into a Cisco-formatted range
-    Stub.
-    Future development plans on altering format depending on "new" switch model.
+    """
+    Turn a collection of ports into a Cisco-formatted range
 
-    Keyword arguments:
-    ports -- a list of port names
+    .. todo:: Altering format depending on "new" switch model
 
-    Returns:
-    condensed -- a string of ports in a Cisco-formatted range
+    :param ports: List of port names
+
+    :returns: Ports in a Cisco-formatted range
+    :rtype: String
     """
     keysplit = re.compile(r'[FGT](\d/)+')
     groups = {}
@@ -84,20 +84,49 @@ def condensify_ports(ports):
     return condensed
 
 
+def get_vlan_list(oldconfig, regex):
+    """
+    Retrieve all VLANs from the old configuration file and return a list.
+
+    (This is intended for future use in cross-platform conversions.)
+
+    :param oldconfig: CiscoConfParse object of existing configuration file
+    :param regex: Regex string used to determine if port is a feed
+
+    :returns: All VLANs defined, sorted in ascending order
+    :rtype: List
+    """
+    vlans = []
+    allvlans = oldconfig.find_objects(r"^vlan \d+")
+    allvlans.reverse()
+    for obj in allvlans:
+        # vlans.append(obj.text.split()[-1])
+        vlan = obj.text.split()[-1]
+        vlans.append(vlan)
+    return natsorted(vlans, key=lambda x: x.lower())
+
+
 def vlan_extract(oldconfig, newconfig, regex, genconfig=False):
-    """Retrieve all VLANs from the old configuration file
-    Automatically detects if certain VLANs will not be used and will offer to prune them.
-    Note that for pruning to work, this _must_ be called before `setup_feeds`.
+    """
+    Retrieve all VLANs from the old configuration file
 
-    Keyword arguments:
-    oldconfig -- CiscoConfParse object of existing configuration file
-    newconfig -- CiscoConfParse object, representing the "new" config file; defaults to None
-    regex -- regex string used to determine if port is a feed
-    genconfig -- boolean representing if a full config will be generated:
-    If True, all VLANs will be defined in the new config file. Defaults to False
+    Automatically detects if certain VLANs will not be used and will offer to
+    prune them.
 
-    Returns:
-    vlans -- a sorted list of all VLANs defined
+    .. note:: For pruning to work, this _must_ be called before
+              :py:func:`setup_feeds`
+
+    :param oldconfig: CiscoConfParse object of existing configuration file
+    :param newconfig: CiscoConfParse object, representing the "new" config file
+                 defaults to None
+    :param regex: Regex string used to determine if port is a feed
+    :param genconfig: A boolean representing if a full config will be
+                      generated:
+                      If True, all VLANs will be added to the new config file.
+                      Defaults to False
+
+    :returns: All VLANs defined, sorted in ascending order
+    :rtype: List
     """
     vlans = []
     allvlans = oldconfig.find_objects(r"^vlan \d+")
@@ -111,7 +140,8 @@ def vlan_extract(oldconfig, newconfig, regex, genconfig=False):
         vlanname = obj.re_search_children(r"name")
         vlanname = vlanname[0].text.split()[-1] if vlanname else "No Name!"
         if not usedby and 'y' in input(
-                "VLAN " + vlan + " (" + vlanname + ") is not used by any interface. Remove?[y|N]: ").lower():
+                "VLAN " + vlan + " (" + vlanname +
+                ") is not used by any interface. Remove?[y|N]: ").lower():
             continue
         else:
             vlans.append(vlan)
@@ -130,7 +160,12 @@ def vlan_extract(oldconfig, newconfig, regex, genconfig=False):
 
 
 def add_snooping(newconfig, vlans):
-    """Add DHCP snooping commands to new configuration file"""
+    """
+    Add DHCP snooping commands to new configuration file
+
+    :param newconfig: CiscoConfParse object, representing the "new" config file
+    :param vlans: List of VLANs to add
+    """
     newconfig.append_line("!")
     newconfig.append_line("!")
     newconfig.append_line("ip dhcp snooping vlan " + ",".join(vlans))
@@ -141,33 +176,51 @@ def add_snooping(newconfig, vlans):
 
 
 def migrate_ports(oldconfig, newconfig, hostname, switch_type):
-    """Map and transfer configuration settings of old ports
-    Searches for Excel workbooks in the `cutsheer_dir` directory.
-    The "cutsheet" files are generated by TurboClerk which are pulled from Netdoc.
+    """
+    Map and transfer configuration settings of old ports
 
-    As of May 2016, Carlos Bassett has set a standard for worksheet layouts and file names, as follows:
+    Searches for Excel workbooks in the `./cutsheer_dir/` directory.
+    The "cutsheet" files are generated by TurboClerk which are pulled from
+    Netdoc.
 
-    The spreadsheets must have each tab nammed from the source switch and the first column *MUST* be the port name.
-    Any jack associated to this port must be in the row, otherwise configuration will not be transferred.
-    The file with the current port-jack mappings must have the building code in the name, along with "as is".
-    The file with the future port-jack mappings must have the building code in the name, along with "to be".
-    The file with the future port-jack mappings *MUST* begin listing ports in the third row.
+    As of May 2016, Carlos Bassett has set a standard for worksheet layouts and
+    file names, as follows:
 
-    Note that this function has the potential to break if corresponding jacks are found from a different existing switch.
-    A future workaround of loading the switch it is found from has been added as a TODO
+    * The spreadsheets must have each tab nammed from the source switch and the
+      first column *MUST* be the port name.
+    * Any jack associated to this port must be in the row, otherwise
+      configuration will not be transferred.
+    * The file with the current port-jack mappings must have the building code
+      in the name, along with "as is".
+    * The file with the future port-jack mappings must have the building code
+      in the name, along with "to be".
+    * The file with the future port-jack mappings *MUST* begin listing ports in
+      the third row.
 
-    All returned variables are intended for printing out warnings/notices/debugging
+    Note that this function has the potential to break if corresponding jacks
+    are found from a different existing switch.
+    A future workaround of loading the switch it is found from has been added
+    as a TODO
 
-    Keyword arguments:
-    oldconfig -- CiscoConfParse object of existing configuration file
-    newconfig -- CiscoConfParse object, representing the "new" config file
-    hostname -- the name of the new switch
-    switch_type -- the index of switch_models that represents the "new" switch model
+    .. todo:: Remove `print` statements when `interfaces_for_review` is
+              completed
 
-    Returns:
-    blades -- the set of detected blade numbers in the stack
-    nojacks -- the list of port names on the new switch that do not have a jack associated with it
-    newjacks -- the list of port names on the new switch that have jacks associated, but these jacks are not found in any cutsheets for the building
+    All returned variables are intended for printing out
+    warnings/notices/debugging
+
+    :param oldconfig: CiscoConfParse object of existing configuration file
+    :param newconfig: CiscoConfParse object, representing the "new" config file
+    :param hostname: Name of the new switch
+    :param switch_type: the index of switch_models that represents the "new"
+                        switch model
+
+    :returns: _blades_ -- Detected blade numbers in the stack
+              _nojacks_ -- Port names on the new switch that do not have a jack
+              associated with them
+              _newjacks_ -- Port names on the new switch that have jacks
+              associated to them, however they do not exist in any As-Is
+              spreadsheets
+    :rtype: (Set, List, List)
     """
     # TODO: Detect jacks originating from a different source switch and
     # temporarily load their configuration file
@@ -186,7 +239,8 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
     filtered_files = []
     while True:
         filtered_files = [x for x in os.listdir(cutsheet_dir) if
-                          (x.split()[0].split("-")[0].lower() in hostname.lower()) and
+                          (x.split()[0].split("-")[0].lower() in
+                           hostname.lower()) and
                           ("as-is" in x.lower() or "as is" in x.lower())]
         if not filtered_files:
             no_files_found(cutsheet_dir)
@@ -204,7 +258,7 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                     match = [
                         x for x in allconfigfiles if alt and sheet[
                             0:alt[0][0]] in x.lower()]
-                if match and not sheet in otherconfigs.keys():
+                if match and sheet not in otherconfigs.keys():
                     otherconfigs[sheet] = CiscoConfParse(
                         config_dir + match[0], factory=True)
             except IOError as e:
@@ -217,15 +271,17 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                     # from the port (not module) number ourselves
                     try:
                         portname = row[0].value
-                        if not '/' in portname:
+                        if '/' not in portname:
                             break  # Ensure the row is for a port
                         indices = [m.span()
                                    for m in re.finditer(r"\d+", portname)]
-                        portname = portname[0: indices[0][
-                            0]] + "/".join([str(int(portname[num[0]:num[1]])) for num in indices])
+                        portname = (portname[0: indices[0][0]] +
+                                    "/".join([str(int(portname[num[0]:num[1]]))
+                                              for num in indices]))
                         if int(cell.value) in jacks.keys():
                             print(
-                                "WARNING! DUPLICATE JACK FOUND IN AS-IS:", cell.value)
+                                "WARNING! DUPLICATE JACK FOUND IN AS-IS:",
+                                cell.value)
                             print("SWITCH:", ws.title.lower())
                             print("PORT:", portname)
                         jacks[int(cell.value)] = {
@@ -238,7 +294,8 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                         continue
     while True:
         filtered_files = [x for x in os.listdir(cutsheet_dir) if
-                          (x.split()[0].split("-")[0].lower() in hostname.lower()) and
+                          (x.split()[0].split("-")[0].lower() in
+                           hostname.lower()) and
                           ("to-be" in x.lower() or "to be" in x.lower())]
         if not filtered_files:
             no_files_found(cutsheet_dir)
@@ -254,23 +311,28 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                 for row in ws.rows:
                     try:
                         portname = row[0].value
-                        if not '/' in portname:
+                        if '/' not in portname:
                             continue  # Ensure the row is for a port
                         indices = [m.span()
                                    for m in re.finditer(r"\d+", portname)]
-                        portname = portname[0:indices[0][
-                            0]] + "/".join([str(int(portname[num[0]:num[1]])) for num in indices])
-                        # This grabs the blade number. re.finditer will look for all digits
-                        # and will be stored in 'm'. m.span will give the index numbers for
-                        # where the match starts (inclusive) and where it ends (exclusive),
-                        # and returns them as tuples. Since the blade is the first number,
-                        # we want the first match. We then get the first number from that
-                        # tuple since it's the index number of the string. You may be asking,
-                        # "wait, aren't the cutsheets configured to only use the first letter
-                        # of the port type, e.g. 'F|G|T'?" Yes, that's how it is currently,
-                        # but since the cutsheet generator was designed by a student and
-                        # edited by students, I have this unwarranted fear of someone changing
-                        # 'T' to 'Te', etc. after I am long gone and this is still in use
+                        portname = (portname[0:indices[0][0]] +
+                                    "/".join([str(int(portname[num[0]:num[1]]))
+                                              for num in indices]))
+                        # This grabs the blade number. re.finditer will look
+                        # for all digits and will be stored in 'm'. m.span will
+                        # give the index numbers for where the match starts
+                        # (inclusive) and where it ends (exclusive), and
+                        # returns them as tuples. Since the blade is the first
+                        # number, we want the first match. We then get the
+                        # first number from that tuple since it's the index
+                        # number of the string. You may be asking, "wait,
+                        # aren't the cutsheets configured to only use the first
+                        # letter of the port type, e.g. 'F|G|T'?" Yes, that's
+                        # how it is currently, but since the cutsheet generator
+                        # was designed by a student and edited by students, I
+                        # have this unwarranted fear of someone changing 'T' to
+                        # 'Te', etc. after I am long gone and this is still in
+                        # use
                         blades.add(
                             int(portname[
                                 [m.span()
@@ -278,8 +340,6 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                             ])
                         )
                         transferred = False
-                        # TODO: Remove `print` statements when `interfaces_for_review`
-                        # is completed
                         for cell in row:
                             try:
                                 # Does the host match the one from our config?
@@ -297,8 +357,8 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                                 # If not, try loading it
                                 else:
                                     host = jacks[int(cell.value)]["old switch"]
-                                    cfg = otherconfigs[
-                                        host] if host in otherconfigs.keys() else None
+                                    cfg = (otherconfigs[host] if host in
+                                           otherconfigs.keys() else None)
                                     if cfg:
                                         port = cfg.find_interface_objects(
                                             jacks[int(cell.value)]["old port"])
@@ -320,15 +380,12 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                                       jacks[int(cell.value)]["old port"],
                                       "from",
                                       jacks[int(cell.value)]["old switch"])
-                            except (ValueError, TypeError):  # Failures for int() cast
+                            # Failures for int() cast
+                            except (ValueError, TypeError):
                                 continue  # Try next cell
                             except KeyError:
                                 # We have a valid jack number but it's new
                                 newjacks.append(portname)
-                                # print(
-                                #     "Port",
-                                #     portname,
-                                #     "is connected to a new jack. Please configure this manually.")
                                 newconfig.append_line("!")
                                 newconfig.append_line("interface " + portname)
                                 newconfig.append_line(" %%NEW CONNECTION%%")
@@ -336,10 +393,6 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                                 break
                         if not transferred:
                             nojacks.append(portname)
-                            # print(
-                            #     "Port",
-                            #     portname,
-                            #     "is not connected to a jack and will be shutdown. Please confirm this manually")
                             newconfig.append_line("!")
                             newconfig.append_line("interface " + portname)
                             newconfig.append_line(" shutdown")
@@ -352,9 +405,11 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
                 hostname,
                 "was not found!")
             print(
-                "If you need to modify the workbooks, make the changes before responding.")
+                ("If you need to modify the workbooks, make the changes "
+                    "before responding."))
             if "n" in force_user_input(
-                    "Would you like to retry? ", r"[Yy][EeSs]*|[Nn][Oo]?").lower():
+                    "Would you like to retry? ",
+                    r"[Yy][EeSs]*|[Nn][Oo]?").lower():
                 sys.exit("Aborting...")
         else:
             break
@@ -366,16 +421,21 @@ def migrate_ports(oldconfig, newconfig, hostname, switch_type):
 
 
 def interfaces_for_review(newconfig, nojacks, newjacks):
-    """Searches for interfaces on the "new" device with non-standard configs to be reviewed manually.
-    Searches for statically set PoE, duplex, operating speed, no defined switchport mode
+    """
+    Searches for interfaces on the "new" device with non-standard configs to
+    be reviewed manually.
 
-    Keyword arguments:
-    newconfig -- CiscoConfParse object representing the "new" configuration file
+    Searches for statically set PoE, duplex, operating speed, no defined
+    switchport mode
+
+    :param newconfig: CiscoConfParse object representing the "new"
+                      configuration file
     """
     power = newconfig.find_objects_w_child(r"^interf", r"^ power")
     # print power
     if power:
-        print("\nManually review the following Interfaces for Power settings:")
+        print(
+            "\nManually review the following Interfaces for Power settings:")
         power_ports = []
         for obj in power:
             # print(" ", obj.text)
@@ -384,7 +444,8 @@ def interfaces_for_review(newconfig, nojacks, newjacks):
 
     duplex = newconfig.find_objects_w_child(r"^interf", r"^ duplex")
     if duplex:
-        print("\nManually review the following Interfaces for Duplex settings:")
+        print(
+            "\nManually review the following Interfaces for Duplex settings:")
         duplex_ports = []
         for obj in duplex:
             # print(" ", obj.text)
@@ -409,46 +470,60 @@ def interfaces_for_review(newconfig, nojacks, newjacks):
         for obj in access:
             # print(" ", obj.text)
             access_ports.append(obj.text.split()[-1])
-        print("\nThese interfaces did not specify Access or Trunk mode and were set to Access by default.\nManually review the following:")
+        print(
+            ("\nThese interfaces did not specify Access or Trunk mode and "
+                "were set to Access by default.\nManually review the "
+                "following:"))
         print(condensify_ports(access_ports))
         for obj in access:
             obj.append_to_family(" switchport mode access")
 
     if nojacks:
-        print("\nThe following interfaces did not have any jacks specified and will be shut down:")
+        print(
+            ("\nThe following interfaces did not have any jacks specified and"
+             " will be shut down:"))
         print(condensify_ports(nojacks))
 
     if newjacks:
-        print("\nThe following interfaces appear to have new jacks associated. Please manually configure them:")
+        print(
+            ("\nThe following interfaces appear to have new jacks associated. "
+             "Please manually configure them:"))
         print(condensify_ports(newjacks))
     print("")
     newconfig.commit()
 
 
 def add_voice_vlan(voicevlan, newconfig):
-    """Add voice VLAN to access ports that do not have it
+    """
+    Add voice VLAN to access ports that do not have it
 
-    Keyword arguments:
-    voicevlan -- a VLAN represented as a string or int
-    newconfig -- CiscoConfParse object representing the "new" configuration file
+    .. todo:: Remove `print` statements when `interfaces_for_review` is
+
+    :param voicevlan: a VLAN represented as a string or int
+    :param newconfig: CiscoConfParse object representing the "new"
+                      configuration file
     """
     modified = []
     Voice = " switchport voice vlan " + str(voicevlan)  # Cast, just in case
     NewIntfs = newconfig.find_objects_wo_child(
         r"^interf", r"^ switchport mode trunk")
     for obj in NewIntfs:
-        if obj.access_vlan != 0:  # testing to see if access port, should probably adjust to search for switchport mode access, but some ports have this explicit and some don"t
+        # testing to see if access port, should probably adjust to search for
+        # switchport mode access, but some ports have this explicit and some
+        # don't
+        if obj.access_vlan != 0:
             hasVoice = False
             for child in obj.children:
                 if "voice" in child.text:
                     hasVoice = True
-            if hasVoice == False:
+            if not hasVoice:
                 obj.append_to_family(Voice)
                 modified.append(obj.text)
-    modified = []
-    # TODO: Remove `print` statements when `interfaces_for_review` is completed
+    # modified = []
     if len(modified) > 0:
-        print("The following ports had a Voice VLAN added. Please manually check that this is appropriate:")
+        print(
+            ("The following ports had a Voice VLAN added. Please manually "
+                " check that this is appropriate:"))
         for each in modified:
             print(" ", each)
     newconfig.commit()
@@ -456,13 +531,18 @@ def add_voice_vlan(voicevlan, newconfig):
 
 
 def trunk_cleanup(newconfig):
-    """Remove access mode configuration on trunk ports
-    Removes access/voice vlan configs, spanning-tree portfast, and no snmp trap link-status
-
-    Keyword arguments:
-    newconfig -- CiscoConfParse object representing the "new" configuration file
     """
-    # TODO: Detect and remove VLANs from VLAN ranges
+    Remove access mode configuration on trunk ports
+
+    Removes `access/voice vlan` configs, `spanning-tree portfast`, and
+    `no snmp trap link-status`
+
+    .. todo:: Detect and remove VLANs from VLAN ranges
+
+    :param newconfig: CiscoConfParse object representing the "new"
+                      configuration file
+    """
+    #
     TrunkInts = newconfig.find_objects_w_child(
         r"^interf", r"^ switchport mode trunk|shutdown")
     for obj in TrunkInts:
@@ -513,8 +593,10 @@ def trunk_cleanup(newconfig):
 
 
 def remove_mdix_and_dot1q(newconfig):
-    """Remove MDIX and dot1q from all interfaces
-    Should be run after `trunk_cleanup()`
+    """
+    Remove MDIX and dot1q from all interfaces
+
+    .. note:: Should be run after `trunk_cleanup()`
 
     Keyword arguments:
     newconfig -- CiscoConfParse object, representing the "new" config file
@@ -533,11 +615,11 @@ def remove_mdix_and_dot1q(newconfig):
 
 
 def access_cleanup(newconfig):
-    """Remove trunk configuration for all ports set to access mode
+    """
+    Remove trunk configuration for all ports set to access mode
 
-    Keyword arguments:
-    oldconfig -- CiscoConfParse object of existing configuration file
-    newconfig -- CiscoConfParse object, representing the "new" config file
+    :param oldconfig: CiscoConfParse object of existing configuration file
+    :param newconfig: CiscoConfParse object, representing the "new" config file
     """
     AccessInts = newconfig.find_objects_w_child(
         r"^interf", r"^ switchport mode access")
@@ -557,20 +639,24 @@ def access_cleanup(newconfig):
     #     for child in obj.children:
     #         if r"switchport trunk" in child.text:
     #             child.delete()
-    #         child.replace_children(r"spanning\-tree\sportfast\sedge.*", "spanning-tree portfast")
+    #         child.replace_children(
+    #                                r"spanning\-tree\sportfast\sedge.*",
+    #                                "spanning-tree portfast")
     # newconfig.commit()
 
 
 def extract_management(oldconfig, newconfig):
-    """Extract the management VLAN and add it to new config file
-    Assuming the target equipment is a layer 2 switch with only one management VLAN,
-    the VLAN config is extracted and the option to retain IP information is provided.
-    'ip tacacs source-interface <VLAN>' is added but only necessary for a 4506;
+    """
+    Extract the management VLAN and add it to new config file
+
+    Assuming the target equipment is a layer 2 switch with only one management
+    VLAN, the VLAN config is extracted and the option to retain IP information
+    is provided.
+    `ip tacacs source-interface <VLAN>` is added but only necessary for a 4506;
     this command will be ignored on all other models.
 
-    Keyword arguments:
-    oldconfig -- CiscoConfParse object of existing configuration file
-    newconfig -- CiscoConfParse object, representing the "new" config file
+    :param oldconfig: CiscoConfParse object of existing configuration file
+    :param newconfig: CiscoConfParse object, representing the "new" config file
     """
     Vlan1 = oldconfig.find_objects(r"^interface Vlan1$")
     for vlan in Vlan1:
@@ -596,7 +682,8 @@ def extract_management(oldconfig, newconfig):
     else:
         if len(ManagementVlan) > 1:
             print(
-                "Several VLANs were found with IP configuration. (Is this from a router?)")
+                ("Several VLANs were found with IP configuration. (Is this "
+                    "from a router?)"))
             print("The following were found:")
             ok = False
             while not ok:
@@ -604,13 +691,16 @@ def extract_management(oldconfig, newconfig):
                         xrange(1, len(ManagementVlan) + 1), ManagementVlan):
                     print(' [' + str(option) + ']', vlan.text)
                 choice = None
-                while not choice in xrange(1, len(ManagementVlan) + 1):
+                while choice not in xrange(1, len(ManagementVlan) + 1):
                     try:
                         choice = int(
-                            input("Please select a source VLAN for management: "))
+                            input(
+                                ("Please select a source VLAN for "
+                                    "management: ")))
                     except:
                         pass
-                choice -= 1  # Remember: We're enumerating from 1, so cut the index back
+                # Remember: We're enumerating from 1, so cut the index back
+                choice -= 1
                 print(ManagementVlan[choice].text)
                 for child in ManagementVlan[choice].children:
                     print(child.text)
@@ -638,7 +728,8 @@ def extract_management(oldconfig, newconfig):
                 print(" Mask   :", newmask)
                 if is_ip(newip) and is_ip(newgate) and is_ip(newmask):
                     if 'y' in force_user_input(
-                            "Is this correct? ", r"[Yy][EeSs]*|[Nn][Oo]?").lower():
+                            "Is this correct? ",
+                            r"[Yy][EeSs]*|[Nn][Oo]?").lower():
                         break
                 else:
                     print("One of the addresses is not a valid IP format!")
@@ -664,16 +755,19 @@ def extract_management(oldconfig, newconfig):
                 print("The following were found:")
                 while True:
                     for option, gate in zip(
-                            xrange(1, len(DefaultGateway) + 1), DefaultGateway):
+                        xrange(1, len(DefaultGateway) + 1),
+                            DefaultGateway):
                         print(' [' + str(option) + ']', gate.text)
                     choice = None
-                    while not choice in xrange(1, len(DefaultGateway) + 1):
+                    while choice not in xrange(1, len(DefaultGateway) + 1):
                         try:
                             choice = int(
-                                force_user_input("Please select the default gateway: "))
+                                force_user_input(
+                                    "Please select the default gateway: "))
                         except:
                             pass
-                    choice -= 1  # Remember: We're enumerating from 1, so cut the index back
+                    # Remember: We're enumerating from 1, so cut the index back
+                    choice -= 1
                     print(DefaultGateway[choice].text)
                     if 'y' in input("Is this correct?[y|N]: ").lower():
                         break
@@ -688,20 +782,21 @@ def extract_management(oldconfig, newconfig):
             else:
                 newconfig.append_line(DefaultGateway[0].text)
             newconfig.append_line("!")
-        # Only the 4506 uses the following line, but it will be ignored on other
-        # devices anyways, so we"ll just leave it here
+        # Only the 4506 uses the following line, but it will be ignored on
+        #  other devices anyways, so we"ll just leave it here
         newconfig.append_line("ip tacacs source-interface " +
                               mgmt.text.split()[-1])
         newconfig.commit()
 
 
 def file_export(outputfile, newconfig):
-    """Save current configuration to a file
+    """
+    Save current configuration to a file
+
     Exports to the directory defined by internal/global var 'output_dir'
 
-    Keyword arguments:
-    outputfile -- desired file name
-    newconfig -- CiscoConfParse object, representing the "new" config file
+    :param outputfile: Desired file name
+    :param newconfig: CiscoConfParse object, representing the "new" config file
     """
     try:
         newconfig.save_as(output_dir + outputfile)
@@ -712,15 +807,18 @@ def file_export(outputfile, newconfig):
 
 
 def setup_feeds(newconfig, switch_type, blades, vlans):
-    """Configure feedports
+    """
+    Configure feedports
+
     Allows the user to define as many feedports as desired.
     Checks the validity of the port name as defined by a regex string.
 
-    Keyword arguments:
-    newconfig -- CiscoConfParse object, representing the "new" config file
-    switch_type -- the representation of the switch model in the form of the switch_models index
-    blades -- a set of all blade numbers in the stack
-    vlans -- a list of all VLANs transferred to the new configuration file
+    :param newconfig: CiscoConfParse object, representing the "new" config file
+    :param switch_type: The representation of the switch model in the form of
+                        the switch_models index
+    :param blades: A Set of all blade numbers in the stack
+    :param vlans: -- A List of all VLANs transferred to the new configuration
+                     file
     """
     if "y" in input(
             "\nWould you like to set up feedports?[y|N]: ").lower():
@@ -733,8 +831,8 @@ def setup_feeds(newconfig, switch_type, blades, vlans):
                     blade = int(feedport[
                         [m.span() for m in re.finditer(r"\d", feedport)][0][0]
                     ])
-                    if re.search(feed_ports_regex[switch_models[switch_type]], feedport) and (
-                            blade in blades):
+                    if re.search(feed_ports_regex[switch_models[switch_type]],
+                                 feedport) and (blade in blades):
                         exists = newconfig.find_objects(
                             r"^interface " + feedport.strip())
                         if len(exists) > 1:
@@ -757,13 +855,17 @@ def setup_feeds(newconfig, switch_type, blades, vlans):
                             _setup_feed(newconfig, feedport, switch_type)
                     else:
                         print(
-                            "That is an invalid port. Either the spelling is wrong or the numbering is out of range!")
+                            ("That is an invalid port. Either the spelling is "
+                                "wrong or the numbering is out of range!"))
                         if 'y' in input(
-                                "Would you like to use it anyways?[y|N]: ").lower():
+                                ("Would you like to use it "
+                                    "anyways?[y|N]: ")).lower():
                             exists = newconfig.find_objects(
                                 r"^interface " + feedport.strip())
                             if len(exists) > 1:
-                                print("Uh, your interface matches several others:")
+                                print(
+                                    ("Uh, your interface matches several "
+                                     "others:"))
                                 for each in exists:
                                     print(" ", each.text)
                                 print("Abandoning changes...")
@@ -788,15 +890,17 @@ def setup_feeds(newconfig, switch_type, blades, vlans):
 
 
 def _setup_feed(newconfig, feedport, switch_type):
-    """Create or modify the desired feed port
+    """
+    Create or modify the desired feed port
+
     Only to be called by the setup_feeds function.
     Prompts for description, will add 'dot1q' for 3560 models
     Puts port into trunk mode, adds all VLANs, adds DHCP snooping trust
 
-    Keyword arguments:
-    newconfig -- CiscoConfParse object, representing the "new" config file
-    feedport -- the string representing the desired feed name
-    switch_type -- the representation of the switch model in the form of the switch_models index
+    :param newconfig: CiscoConfParse object, representing the "new" config file
+    :param feedport: String representing the desired feed name
+    :param switch_type: Representation of the switch model in the form of the
+                        switch_models index
     """
     existing = newconfig.find_objects(r"^interface " + feedport.strip())
     if existing:
@@ -825,7 +929,9 @@ def _setup_feed(newconfig, feedport, switch_type):
     #         newconfig.insert_after(
     #             r"^hostname",
     #             " switchport trunk encapsultion dot1q")
-    #     if "y" in input("Would you like to add a description?[y|N]: ").lower():
+    #     if "y" in input(
+    #                     ("Would you like to add a description?[y|N]: ")
+    #                    ).lower():
     #         newconfig.insert_after(
     #             r"^hostname",
     #             " description " +
@@ -853,23 +959,27 @@ def _setup_feed(newconfig, feedport, switch_type):
 def get_switch_model():
     """Prompt user to select model from compatible list
 
-    Returns the user's input as the internal `switch_models` index
+    :returns: The user's input as the internal `switch_models` index
+    :rtype: Int
     """
     print("Compatible switch models:")
     for switch in enumerate(switch_models):
         print(" [" + str(switch[0] + 1) + "]", switch[1])
     switch_type = None
-    while not switch_type in xrange(0, len(switch_models)):
+    while switch_type not in xrange(0, len(switch_models)):
         switch_type = int(
             input("What switch model are you programming? ")) - 1
     return switch_type
 
 
 def get_configs():
-    """Set the configuration file to pull data from
+    """
+    Set the configuration file to pull data from
     Prompts user for file name
 
-    Returns two CiscoConfParse objects: the old config file, and a new config
+    :returns: oldconfig -- Existing/source configuration file
+              newconfig -- Container for the new device's configuration
+    :rtype: CiscoConfParse, CiscoConfParse
     """
     directory = sorted([x for x in os.listdir(config_dir) if "confg" in x])
     if not directory:
@@ -877,7 +987,7 @@ def get_configs():
     for item in enumerate(directory):
         print(" [" + str(item[0] + 1) + "]", item[1])
     name = None
-    while not name in xrange(1, len(directory) + 1):
+    while name not in xrange(1, len(directory) + 1):
         name = int(
             input("Please select the file number of the old config: "))
     filename = directory[name - 1]
@@ -894,13 +1004,16 @@ def get_configs():
 
 
 def force_user_input(display, expect=r""):
-    """Enforce that the user input at least one character
+    """
+    Enforce that the user input at least one character
 
-    Keyword arguments:
-    display -- the string to display as the input prompt
-    expect -- a regex string representing the required format of the response before returning to caller. Defaults to an empty string (match any)
+    :param display: String to display as the input prompt
+    :param expect: Regex string representing the required format of the
+                   response before returning to caller. Defaults to an empty
+                   string (match any)
 
-    Returns user input string
+    :returns: User's input
+    :rtype: String
     """
     name = ""
     ok = False
@@ -914,10 +1027,10 @@ def force_user_input(display, expect=r""):
 
 
 def set_voice_vlan(oldconfig):
-    """Select and add a voice VLAN to add to access ports
+    """
+    Select and add a voice VLAN to add to access ports
 
-    Keyword arguments:
-    oldconfig -- CiscoConfParse object of existing configuration file
+    :param oldconfig: CiscoConfParse object of existing configuration file
     """
     print("Available voice VLANs:")
     vlans = oldconfig.find_objects(r"^vlan 1\d\d$")
@@ -939,8 +1052,10 @@ def set_voice_vlan(oldconfig):
             except:
                 voicevlan = ""  # Invalid input
     elif len(vlans) == 1:
-        if "n" in input("Only one voice VLAN found: " + vlans[0].text.split(
-        )[-1] + " - " + str(vlans[0].children[0].text.split()[1:]) + ". Use this?[Y|n]: ").lower():
+        if "n" in input("Only one voice VLAN found: " +
+                        vlans[0].text.split()[-1] + " - " +
+                        str(vlans[0].children[0].text.split()[1:]) +
+                        ". Use this?[Y|n]: ").lower():
             skipvoice = True
         else:
             voicevlan = vlans[0].text.split()[-1]
@@ -952,13 +1067,14 @@ def set_voice_vlan(oldconfig):
 
 
 def no_files_found(directory):
-    """Allows the user to move files to correct directory or exit early
+    """
+    Allows the user to move files to correct directory or exit early
 
-    Keyword arguments:
-    directory -- the folder in which the files should be located"""
+    :param directory: The folder in which the files should be located
+    """
     print("Files not found in directory:", os.path.abspath(directory))
     print("If you would like to add/move them, please do so now!")
-    if not 'n' in input("Would you like to retry?[Y|n] ").lower():
+    if 'n' not in input("Would you like to retry?[Y|n] ").lower():
         return
     else:
         sys.exit("Exiting configuration generator")
@@ -967,9 +1083,9 @@ def no_files_found(directory):
 def is_ip(addr):
     return True if re.match(r'(\d{1,3}\.){3}\d{1,3}', addr.strip()) else False
 
-    # This module is designed to allow running it from a CLI or importing it and calling
-    # its functions, however it revolves mostly around Layer 2 device
-    # configuration
+    # This module is designed to allow running it from a CLI or importing it
+    # and calling its functions, however it revolves mostly around Layer 2
+    # device configuration
 if __name__ == "__main__":
     oldconfig, newconfig = get_configs()
     switch_type = get_switch_model()
@@ -977,7 +1093,7 @@ if __name__ == "__main__":
     outputfile = input(
         "Enter output file name (default - " + hostname + ".txt): ")
     outputfile = outputfile if outputfile else hostname + ".txt"
-    createconfig = (not "n" in input(
+    createconfig = ("n" not in input(
         "Generate full config file?[Y|n]: ").lower())
 
     blades, nojacks, newjacks = migrate_ports(
