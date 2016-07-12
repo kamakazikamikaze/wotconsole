@@ -1,6 +1,6 @@
 Pathway Engineering's Configuration Generator
 =============================================
-*Eliminating mistakes by making a developer responsible to fix them for you*
+*Eliminating mistakes by making a developer responsible to fix them for you!*
 
 
 Introduction
@@ -14,9 +14,9 @@ behold, we delivered **LIKE A BOSS**.
 The Config Generator is designed to take in existing configuration files,
 jack-to-port documentation, current device model and target model in order to
 speed up the process of pre-configuring equipment for Next-Gen project
-deployment. Hopefully we will get around to creating a Cisco-to-Dell and vice-
-versa extension, but we'll that to Kent - because he slaves away his free time
-to work for some strange reason.
+deployment. Hopefully we will get around to creating a Cisco-to-Dell and
+vice-versa extension, but we'll that to Kent - because he slaves away his free
+time to work for some strange reason.
 
 Contents:
 
@@ -30,7 +30,6 @@ Contents:
    logicalorder
    portsonly
    api
-   example
 
 
 Indices and tables

@@ -498,6 +498,7 @@ def add_voice_vlan(voicevlan, newconfig):
     Add voice VLAN to access ports that do not have it
 
     .. todo:: Remove `print` statements when `interfaces_for_review` is
+              completed
 
     :param voicevlan: a VLAN represented as a string or int
     :param newconfig: CiscoConfParse object representing the "new"
@@ -957,7 +958,8 @@ def _setup_feed(newconfig, feedport, switch_type):
 
 
 def get_switch_model():
-    """Prompt user to select model from compatible list
+    """
+    Prompt user to select model from compatible list
 
     :returns: The user's input as the internal `switch_models` index
     :rtype: Int

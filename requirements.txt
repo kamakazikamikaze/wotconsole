@@ -1,0 +1,8 @@
+natsort==5.0.1
+ciscoconfparse==1.2.40
+colorama==0.3.7
+ipaddr==2.1.11
+dnspython==1.14.0
+openpyxl==2.3.5
+et-xmlfile==1.0.1
+jdcal==1.2
