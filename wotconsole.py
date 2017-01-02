@@ -25,10 +25,10 @@ def player_search(search, application_id, fields=None, limit=None, stype=None,
     :type limit: int or str
     :param str stype: Search type. Defines minimum length and type of search.
                      Default value is "startswith". Valid values:
-                        — "startswith" - search by initial characters of player
+                        - "startswith": search by initial characters of player
                                          name. Minimum length: 3 characters.
                                          Case insensitive.
-                        — "exact" — Search by exact match of player name.
+                        - "exact": Search by exact match of player name.
                                     Minimum length: 1 character. Case
                                     insensitive
     :param int timeout: Maximum allowed time to wait for response from servers
@@ -36,21 +36,18 @@ def player_search(search, application_id, fields=None, limit=None, stype=None,
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'account/list/',
         params={
             'search': search,
             'application_id': application_id,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language,
             'type': stype,
             'limit': limit
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def player_data(account_id, application_id, access_token=None,
@@ -71,20 +68,17 @@ def player_data(account_id, application_id, access_token=None,
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'account/info/',
         params={
             'account_id': account_id,
             'application_id': application_id,
             'access_token': access_token,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def player_achievements(account_id, application_id, fields=None, language='en',
@@ -103,19 +97,16 @@ def player_achievements(account_id, application_id, fields=None, language='en',
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'account/achievements/',
         params={
             'account_id': account_id,
             'application_id': application_id,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def player_data_ps_uid(psnid, application_id, timeout=10):
@@ -129,17 +120,13 @@ def player_data_ps_uid(psnid, application_id, timeout=10):
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format('ps4') + 'account/psninfo/',
         params={
             'psnid': psnid,
             'application_id': application_id
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def player_data_xbox_uid(xuid, application_id, timeout=10):
@@ -153,17 +140,13 @@ def player_data_xbox_uid(xuid, application_id, timeout=10):
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format('xbox') + 'account/xuidinfo/',
         params={
             'xuid': xuid,
             'application_id': application_id
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 # Authentication
@@ -176,9 +159,9 @@ def player_sign_in(application_id, display=None, expires_at=None,
 
     :param str application_id: Your application key (generated by WG)
     :param str display: Layout for mobile applications.
-                        Valid values: – "page" — Page
-                                      — "popup" — Popup window
-                                      - "touch" — Touch
+                        Valid values: - "page" - Page
+                                      - "popup" - Popup window
+                                      - "touch" - Touch
     :param int expires_at: UNIX POSIX timestamp or delta in seconds. Maximum
                            expiration time is 2 weeks
     :param int nofollow: If set to 1, the user is not redirected. A URL is
@@ -191,7 +174,7 @@ def player_sign_in(application_id, display=None, expires_at=None,
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'auth/login/',
         params={
             'application_id': application_id,
@@ -201,11 +184,7 @@ def player_sign_in(application_id, display=None, expires_at=None,
             'redirect_uri': redirect_uri,
             'language': language
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def extend_player_sign_in(access_token, application_id, expires_at=None,
@@ -225,18 +204,14 @@ def extend_player_sign_in(access_token, application_id, expires_at=None,
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'auth/prolongate/',
         params={
             'access_token': access_token,
             'application_id': application_id,
             'expires_at': expires_at
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def player_sign_out(access_token, application_id,
@@ -254,17 +229,13 @@ def player_sign_out(access_token, application_id,
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'auth/logout/',
         params={
             'access_token': access_token,
             'application_id': application_id
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 # Clans
@@ -290,19 +261,15 @@ def clan_search(application_id, fields=None, limit=None, page_no=None,
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(api_url.format(api_realm) + 'clans/list/',
-                     params={
+    return WOTXResponse(requests.get(api_url.format(api_realm) + 'clans/list/',
+                                     params={
         'application_id': application_id,
-        'fields': fields if fields is None else ','.join(fields),
+        'fields': fields if _not_iter(fields) else ','.join(map(str, fields)),
         'limit': limit,
         'page_no': page_no,
         'search': search
     },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def clan_details(clan_id, application_id, extra=None,
@@ -325,18 +292,14 @@ def clan_details(clan_id, application_id, extra=None,
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(api_url.format(api_realm) + 'clans/info/',
-                     params={
+    return WOTXResponse(requests.get(api_url.format(api_realm) + 'clans/info/',
+                                     params={
         'clan_id': clan_id,
         'application_id': application_id,
-        'extra': extra if extra is None else ','.join(extra),
-        'fields': fields if fields is None else ','.join(fields)
+        'extra': extra if _not_iter(extra) else ','.join(map(str, extra)),
+        'fields': fields if _not_iter(fields) else ','.join(map(str, fields))
     },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def player_clan_data(clan_id, application_id, extra=None,
@@ -357,19 +320,16 @@ def player_clan_data(clan_id, application_id, extra=None,
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'clans/accountinfo/',
         params={
             'clan_id': clan_id,
             'application_id': application_id,
-            'extra': extra if extra is None else ','.join(extra),
-            'fields': fields if fields is None else ','.join(fields)
+            'extra': extra if _not_iter(extra) else ','.join(map(str, extra)),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields))
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def clan_glossary(application_id, fields=None, language='en', api_realm='xbox',
@@ -388,18 +348,15 @@ def clan_glossary(application_id, fields=None, language='en', api_realm='xbox',
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'clans/glossary/',
         params={
             'application_id': application_id,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 # Tankopedia
@@ -420,18 +377,15 @@ def crew_info(application_id, fields=None, language='en', api_realm='xbox',
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/crewroles/',
         params={
             'application_id': application_id,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def vehicle_info(application_id, fields=None, language='en', nation=None,
@@ -456,21 +410,20 @@ def vehicle_info(application_id, fields=None, language='en', nation=None,
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/vehicles/',
         params={
             'application_id': application_id,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language,
-            'nation': nation if nation is None else ','.join(nation),
-            'tank_id': tank_id if tank_id is None else ','.join(tank_id),
-            'tier': tier if tier is None else ','.join(tier)
+            'nation': nation if _not_iter(
+                fields) else ','.join(map(str, nation)),
+            'tank_id': tank_id if _not_iter(
+                tank_id) else ','.join(map(str, tank_id)),
+            'tier': tier if _not_iter(tier) else ','.join(map(str, tier))
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def packages_info(tank_id, application_id, fields=None,
@@ -491,20 +444,17 @@ def packages_info(tank_id, application_id, fields=None,
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/vehiclepackages/',
         params={
-            'tank_id': tank_id if isinstance(
-                tank_id, str) else ','.join(tank_id),
+            'tank_id': tank_id if _not_iter(
+                tank_id) else ','.join(map(str, tank_id)),
             'application_id': application_id,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def equipment_consumable_info(tank_id, application_id, fields=None,
@@ -525,20 +475,17 @@ def equipment_consumable_info(tank_id, application_id, fields=None,
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/vehicleupgrades/',
         params={
-            'tank_id': tank_id if isinstance(
-                tank_id, str) else ','.join(tank_id),
+            'tank_id': tank_id if _not_iter(
+                tank_id) else ','.join(map(str, tank_id)),
             'application_id': application_id,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def achievement_info(application_id, category=None, fields=None, language='en',
@@ -548,8 +495,8 @@ def achievement_info(application_id, category=None, fields=None, language='en',
 
     :param str application_id: Your application key (generated by WG)
     :param category: Filter by award category. Valid values:
-                     — "achievements" — Achievements
-                     — "ribbons" — Ribbons
+                     - "achievements" - Achievements
+                     - "ribbons" - Ribbons
                      Max limit is 100
     :type category: list(str)
     :param fields: Fields to filter or explicitly include. To exclude,
@@ -562,19 +509,16 @@ def achievement_info(application_id, category=None, fields=None, language='en',
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/achievements/',
         params={
             'application_id': application_id,
             'category': category,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def tankopedia_info(application_id, fields=None, language='en',
@@ -593,18 +537,15 @@ def tankopedia_info(application_id, fields=None, language='en',
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/info/',
         params={
             'application_id': application_id,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 # Player ratings
@@ -621,28 +562,25 @@ def types_of_ratings(application_id, fields=None, language='en',
     :param str language: Response language
     :param str platform: Console platform. Default is "default" (all consoles).
                          Valid responses:
-                         — "default" — All platforms (default)
-                         — "xbox" — XBOX
-                         — "ps4" — PlayStation 4
+                         - "default" - All platforms (default)
+                         - "xbox" - XBOX
+                         - "ps4" - PlayStation 4
     :param str api_realm: Platform API. "xbox" or "ps4"
     :param int timeout: Maximum allowed time to wait for response from servers
     :returns: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'ratings/types/',
         params={
             'application_id': application_id,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'platform': platform,
             'language': language
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def dates_with_ratings(rating, application_id, account_id=None, fields=None,
@@ -658,30 +596,27 @@ def dates_with_ratings(rating, application_id, account_id=None, fields=None,
     :param str language: Response language
     :param str platform: Console platform. Default is "default" (all consoles).
                          Valid responses:
-                         — "default" — All platforms (default)
-                         — "xbox" — XBOX
-                         — "ps4" — PlayStation 4
+                         - "default" - All platforms (default)
+                         - "xbox" - XBOX
+                         - "ps4" - PlayStation 4
     :param str api_realm: Platform API. "xbox" or "ps4"
     :param int timeout: Maximum allowed time to wait for response from servers
     :returns: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'ratings/dates/',
         params={
             'rating': rating,
             'application_id': application_id,
             'account_id': account_id,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language,
             'platform': platform
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 # TODO: Accept `time`/`datetime` timestamp for `date` parameter
@@ -700,32 +635,29 @@ def player_ratings(rating, account_id, application_id, date=None, fields=None,
     :param str language: Response language
     :param str platform: Console platform. Default is "default" (all consoles).
                          Valid responses:
-                         — "default" — All platforms (default)
-                         — "xbox" — XBOX
-                         — "ps4" — PlayStation 4
+                         - "default" - All platforms (default)
+                         - "xbox" - XBOX
+                         - "ps4" - PlayStation 4
     :param str api_realm: Platform API. "xbox" or "ps4"
     :param int timeout: Maximum allowed time to wait for response from servers
     :returns: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'ratings/accounts/',
         params={
             'rating': rating,
-            'account_id': account_id if isinstance(
-                account_id, str) else ','.join(account_id),
+            'account_id': account_id if _not_iter(
+                account_id) else ','.join(map(str, account_id)),
             'application_id': application_id,
             'date': date,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'platform': platform,
             'language': language
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def adjacent_positions_in_ratings(
@@ -747,32 +679,29 @@ def adjacent_positions_in_ratings(
     :param int limit: Number of returned entries. Default is 5. Max limit is 50
     :param str platform: Console platform. Default is "default" (all consoles).
                          Valid responses:
-                         — "default" — All platforms (default)
-                         — "xbox" — XBOX
-                         — "ps4" — PlayStation 4
+                         - "default" - All platforms (default)
+                         - "xbox" - XBOX
+                         - "ps4" - PlayStation 4
     :param str api_realm: Platform API. "xbox" or "ps4"
     :param int timeout: Maximum allowed time to wait for response from servers
     :returns: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'ratings/neighbors/',
         params={
             'account_id': account_id,
             'rank_field': rank_field,
             'application_id': application_id,
             'date': date,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language,
             'limit': limit,
             'platform': platform,
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def top_players(rank_field, rating, application_id, date=None, fields=None,
@@ -796,33 +725,30 @@ def top_players(rank_field, rating, application_id, date=None, fields=None,
     :param int page_no: Result page number. Default is 1. Min is 1
     :param str platform: Console platform. Default is "default" (all consoles).
                          Valid responses:
-                         — "default" — All platforms (default)
-                         — "xbox" — XBOX
-                         — "ps4" — PlayStation 4
+                         - "default" - All platforms (default)
+                         - "xbox" - XBOX
+                         - "ps4" - PlayStation 4
     :param str api_realm: Platform API. "xbox" or "ps4"
     :param int timeout: Maximum allowed time to wait for response from servers
     :returns: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'ratings/top/',
         params={
             'rank_field': rank_field,
             'rating': rating,
             'application_id': application_id,
             'date': date,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language,
             'limit': limit,
             'page_no': page_no,
             'platform': platform,
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 # Player's vehicles
 
@@ -851,22 +777,20 @@ def player_tank_statistics(account_id, application_id, access_token=None,
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'tanks/stats/',
         params={
             'account_id': account_id,
             'application_id': application_id,
             'access_token': access_token,
             'in_garage': in_garage,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'language': language,
-            'tank_id': tank_id if tank_id is None else ','.join(tank_id)
+            'tank_id': tank_id if _not_iter(
+                tank_id) else ','.join(map(str, tank_id))
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 def player_tank_achievements(account_id, application_id, access_token=None,
@@ -893,22 +817,20 @@ def player_tank_achievements(account_id, application_id, access_token=None,
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
     '''
-    r = requests.get(
+    return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'tanks/achievements/',
         params={
             'account_id': account_id,
             'application_id': application_id,
             'access_token': access_token,
-            'fields': fields if fields is None else ','.join(fields),
+            'fields': fields if _not_iter(
+                fields) else ','.join(map(str, fields)),
             'in_garage': in_garage,
-            'tank_id': tank_id if tank_id is None else ','.join(tank_id),
+            'tank_id': tank_id if _not_iter(
+                tank_id) else ','.join(map(str, tank_id)),
             'language': language
         },
-        timeout=timeout)
-    response_json = r.json()
-    if 'data' in response_json:
-        return WOTXResponse(response_json)
-    raise WOTXResponseError(response_json)
+        timeout=timeout))
 
 
 class WOTXResponse(object):
@@ -917,8 +839,11 @@ class WOTXResponse(object):
     '''
 
     def __init__(self, response):
-        self.response = response
-        for key, value in response.json().iteritems():
+        rjson = response.json()
+        if not 'data' in rjson:
+            raise WOTXResponseError(rjson, response)
+        self.raw = response
+        for key, value in rjson.iteritems():
             setattr(self, key, value)
 
     def __eq__(self, val):
@@ -929,7 +854,7 @@ class WOTXResponse(object):
 
     def __len__(self):
         if hasattr(self, 'meta'):
-            return self.meta
+            return self.meta['count']
         return 0
 
     def __getitem__(self, index):
@@ -949,11 +874,11 @@ class WOTXResponseError(Exception):
     Error(s) in interaction with WG's API
     '''
 
-    def __init__(self, response):
-        j = response.json()
-        super(WOTXResponseError, self).__init__(j['message'])
-        self.error = j
-        self.response = response
+    def __init__(self, response, raw):
+        super(WOTXResponseError, self).__init__(response['error']['message'])
+        self.raw = raw
+        for key, value in response.iteritems():
+            setattr(self, key, value)
 
     def __eq__(self, val):
         return 'error' == val
@@ -974,3 +899,12 @@ class WOTXResponseError(Exception):
             raise TypeError(
                 'This instance does not have the attribute \'{}\''.format(
                     unknown))
+
+
+def _not_iter(item):
+    r'''
+    Helper function to determine if the object can be iterated over. Used for
+    protecting against invalid input by user for parameters than need to be
+    `join`'d
+    '''
+    return item is None or any(isinstance(item, i) for i in [str, int])
