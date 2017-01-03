@@ -41,8 +41,7 @@ def player_search(search, application_id, fields=None, limit=None, stype=None,
         params={
             'search': search,
             'application_id': application_id,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language,
             'type': stype,
             'limit': limit
@@ -74,8 +73,7 @@ def player_data(account_id, application_id, access_token=None,
             'account_id': account_id,
             'application_id': application_id,
             'access_token': access_token,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language
         },
         timeout=timeout))
@@ -102,8 +100,7 @@ def player_achievements(account_id, application_id, fields=None, language='en',
         params={
             'account_id': account_id,
             'application_id': application_id,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language
         },
         timeout=timeout))
@@ -264,7 +261,7 @@ def clan_search(application_id, fields=None, limit=None, page_no=None,
     return WOTXResponse(requests.get(api_url.format(api_realm) + 'clans/list/',
                                      params={
         'application_id': application_id,
-        'fields': fields if _not_iter(fields) else ','.join(map(str, fields)),
+        'fields': _join_param(fields),
         'limit': limit,
         'page_no': page_no,
         'search': search
@@ -296,8 +293,8 @@ def clan_details(clan_id, application_id, extra=None,
                                      params={
         'clan_id': clan_id,
         'application_id': application_id,
-        'extra': extra if _not_iter(extra) else ','.join(map(str, extra)),
-        'fields': fields if _not_iter(fields) else ','.join(map(str, fields))
+        'extra': _join_param(extra),
+        'fields': _join_param(fields)
     },
         timeout=timeout))
 
@@ -325,9 +322,8 @@ def player_clan_data(clan_id, application_id, extra=None,
         params={
             'clan_id': clan_id,
             'application_id': application_id,
-            'extra': extra if _not_iter(extra) else ','.join(map(str, extra)),
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields))
+            'extra': _join_param(extra),
+            'fields': _join_param(fields)
         },
         timeout=timeout))
 
@@ -352,8 +348,7 @@ def clan_glossary(application_id, fields=None, language='en', api_realm='xbox',
         api_url.format(api_realm) + 'clans/glossary/',
         params={
             'application_id': application_id,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language
         },
         timeout=timeout))
@@ -381,8 +376,7 @@ def crew_info(application_id, fields=None, language='en', api_realm='xbox',
         api_url.format(api_realm) + 'encyclopedia/crewroles/',
         params={
             'application_id': application_id,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language
         },
         timeout=timeout))
@@ -414,14 +408,11 @@ def vehicle_info(application_id, fields=None, language='en', nation=None,
         api_url.format(api_realm) + 'encyclopedia/vehicles/',
         params={
             'application_id': application_id,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language,
-            'nation': nation if _not_iter(
-                fields) else ','.join(map(str, nation)),
-            'tank_id': tank_id if _not_iter(
-                tank_id) else ','.join(map(str, tank_id)),
-            'tier': tier if _not_iter(tier) else ','.join(map(str, tier))
+            'nation': _join_param(nation),
+            'tank_id': _join_param(tank_id),
+            'tier': _join_param(tier)
         },
         timeout=timeout))
 
@@ -447,11 +438,9 @@ def packages_info(tank_id, application_id, fields=None,
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/vehiclepackages/',
         params={
-            'tank_id': tank_id if _not_iter(
-                tank_id) else ','.join(map(str, tank_id)),
+            'tank_id': _join_param(tank_id),
             'application_id': application_id,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language
         },
         timeout=timeout))
@@ -478,11 +467,9 @@ def equipment_consumable_info(tank_id, application_id, fields=None,
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/vehicleupgrades/',
         params={
-            'tank_id': tank_id if _not_iter(
-                tank_id) else ','.join(map(str, tank_id)),
+            'tank_id': _join_param(tank_id),
             'application_id': application_id,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language
         },
         timeout=timeout))
@@ -514,8 +501,7 @@ def achievement_info(application_id, category=None, fields=None, language='en',
         params={
             'application_id': application_id,
             'category': category,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language
         },
         timeout=timeout))
@@ -541,8 +527,7 @@ def tankopedia_info(application_id, fields=None, language='en',
         api_url.format(api_realm) + 'encyclopedia/info/',
         params={
             'application_id': application_id,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language
         },
         timeout=timeout))
@@ -575,8 +560,7 @@ def types_of_ratings(application_id, fields=None, language='en',
         api_url.format(api_realm) + 'ratings/types/',
         params={
             'application_id': application_id,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'platform': platform,
             'language': language
         },
@@ -611,8 +595,7 @@ def dates_with_ratings(rating, application_id, account_id=None, fields=None,
             'rating': rating,
             'application_id': application_id,
             'account_id': account_id,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language,
             'platform': platform
         },
@@ -648,12 +631,10 @@ def player_ratings(rating, account_id, application_id, date=None, fields=None,
         api_url.format(api_realm) + 'ratings/accounts/',
         params={
             'rating': rating,
-            'account_id': account_id if _not_iter(
-                account_id) else ','.join(map(str, account_id)),
+            'account_id': _join_param(account_id),
             'application_id': application_id,
             'date': date,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'platform': platform,
             'language': language
         },
@@ -695,11 +676,10 @@ def adjacent_positions_in_ratings(
             'rank_field': rank_field,
             'application_id': application_id,
             'date': date,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language,
             'limit': limit,
-            'platform': platform,
+            'platform': platform
         },
         timeout=timeout))
 
@@ -741,12 +721,11 @@ def top_players(rank_field, rating, application_id, date=None, fields=None,
             'rating': rating,
             'application_id': application_id,
             'date': date,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language,
             'limit': limit,
             'page_no': page_no,
-            'platform': platform,
+            'platform': platform
         },
         timeout=timeout))
 
@@ -784,11 +763,9 @@ def player_tank_statistics(account_id, application_id, access_token=None,
             'application_id': application_id,
             'access_token': access_token,
             'in_garage': in_garage,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'language': language,
-            'tank_id': tank_id if _not_iter(
-                tank_id) else ','.join(map(str, tank_id))
+            'tank_id': _join_param(tank_id)
         },
         timeout=timeout))
 
@@ -823,11 +800,9 @@ def player_tank_achievements(account_id, application_id, access_token=None,
             'account_id': account_id,
             'application_id': application_id,
             'access_token': access_token,
-            'fields': fields if _not_iter(
-                fields) else ','.join(map(str, fields)),
+            'fields': _join_param(fields),
             'in_garage': in_garage,
-            'tank_id': tank_id if _not_iter(
-                tank_id) else ','.join(map(str, tank_id)),
+            'tank_id': _join_param(tank_id),
             'language': language
         },
         timeout=timeout))
@@ -899,6 +874,13 @@ class WOTXResponseError(Exception):
             raise TypeError(
                 'This instance does not have the attribute \'{}\''.format(
                     unknown))
+
+
+def _join_param(param):
+    r'''
+    Utility method to perform a :py:func:`join` on parameters, if necessary
+    '''
+    return param if _not_iter(param) else ','.join(map(str, param))
 
 
 def _not_iter(item):
