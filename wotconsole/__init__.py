@@ -840,7 +840,7 @@ class WOTXResponse(object):
 
     def __init__(self, response):
         rjson = response.json()
-        if not 'data' in rjson:
+        if 'data' not in rjson:
             raise WOTXResponseError(rjson, response)
         self.raw = response
         for key, value in rjson.iteritems():
