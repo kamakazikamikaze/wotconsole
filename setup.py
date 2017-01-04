@@ -11,5 +11,6 @@ setup(
     url='https://bitbucket.org/kamakazikamikaze/wot-console',
     license='LICENSE.TXT',
     long_description=open('README.rst').read(),
+    packages=['wotconsole'],
     install_requires=['requests']
 )
