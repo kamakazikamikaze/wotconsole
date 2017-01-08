@@ -17,25 +17,26 @@ endpoints or do not have sufficient documentation to understand how to fully
 utilize their libraries. As such, I took it upon myself to create one that was
 thorough and easy to use.
 
-Why not stick with :py:mod:`requests`?
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Why not stick with `requests <http://docs.python-requests.org/en/master/>`_?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-While the `Requests <https://requests.rtfd.io>`_ library may suffice for
+While the ``requests`` library may suffice for
 general use, it can be a bit of a pain having to remember what parameters
 should be sent and what the URL endpoint is. It's also inconvenient when
 trying to code offline. This module has all of this documented and will track
 the URLs for you.
 
-Why Python? You should have used a different language!
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+`Eww, Python! <http://forum-console.worldoftanks.com/index.php?/topic/164306-spending-time-with-family-this-holiday-drove-me-to-tears-so-i-created-a-python-wrapper-for-the-console-api-instead/page__pid__3409786#entry3409786>`_
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Grow up.
+Grow up ;)
 
 What can it do?
 ---------------
 
 WOTConsole is designed for convenience to the developer. Let's say that you're
-needing to search for a tank. A regular :py:mod:`requests` would be akin to:
+needing to search for a tank. A regular ``requests`` implementation would be
+akin to:
 
 .. code:: python
 
@@ -115,4 +116,4 @@ developers may not care for. We can rewrite the code as follows:
         # parameters, URL, etc.
         print(type(wat.raw))
 
-.. raw:: TOOD.rst
+.. include:: TOOD.rst
