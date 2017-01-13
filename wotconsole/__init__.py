@@ -418,7 +418,7 @@ def vehicle_info(application_id, fields=None, language='en', nation=None,
                 fields) else ','.join(map(str, fields)),
             'language': language,
             'nation': nation if _not_iter(
-                fields) else ','.join(map(str, nation)),
+                nation) else ','.join(map(str, nation)),
             'tank_id': tank_id if _not_iter(
                 tank_id) else ','.join(map(str, tank_id)),
             'tier': tier if _not_iter(tier) else ','.join(map(str, tier))
