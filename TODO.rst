@@ -1,30 +1,26 @@
-.. module::wotconsole
-
 TODO
-====
+----
 
-v0.2
-^^^^
+* v0.2
 
-* Finish documentation
-* Unit tests
+  * Finish documentation
+  * Unit tests
 
-v0.3
-^^^^
+* v0.3
 
-* Client-side parameter checking
-* Split queries with parameters that exceed max limit
-   * Ex. :py:func:`vehicle_info` with more than 100 tanks is split into two API queries
-   * Results are rejoined and returned
+  * Client-side parameter checking
+  * Split queries with parameters that exceed max limit
 
-v0.4
-^^^^
+    * Ex. :py:func:`~.vehicle_info` with more than 100 tanks is split into two
+      API queries
+    * Results are rejoined and returned
 
-* :py:func:`WOTXResponse` removes outer "shells" surrounding the actual data
+* v0.4
 
-v0.5
-^^^^
+  * :py:mod:`~.WOTXResponse` removes outer "shells" surrounding the actual data
 
-* Convenience session class, `WOTXSession`, for auto-passing preferences like
-  API key, language, and platform/realm
+* v0.5
+
+  * Convenience session class, :py:mod:`WOTXSession`, for auto-passing preferences like
+    API key, language, and platform/realm
   
