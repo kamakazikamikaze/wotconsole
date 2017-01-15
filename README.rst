@@ -9,6 +9,8 @@ API, specifically for the `World of Tanks - Console
 <https://console.wargaming.com>`_  game. It is a tool designed for convenience
 and ease-of-use.
 
+|docs|
+
 Why create another API wrapper?
 -------------------------------
 
@@ -104,3 +106,8 @@ An up-to-date list of planned features will always be in the
 :file:`TODO.rst` file. Currently it contains:
 
 .. include:: TODO.rst
+
+.. |docs| image:: https://readthedocs.org/projects/docs/badge/?version=latest
+    :alt: Documentation Status
+    :scale: 100%
+    :target: https://wotconsole.readthedocs.io/en/latest/?badge=latest
