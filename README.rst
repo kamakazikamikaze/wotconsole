@@ -1,5 +1,5 @@
-WOTConsole
-===========
+`WOTConsole <https://bitbucket.org/kamakazikamikaze/wotconsole>`_
+=================================================================
 
 Introduction
 ------------
@@ -96,3 +96,11 @@ developers may not care for. We can rewrite the code as follows:
     # parameters, URL, etc.
     ...     print(type(wat.raw))
     <class 'requests.models.Response'>
+
+What improvements will we see?
+------------------------------
+
+An up-to-date list of planned features will always be in the
+:file:`TODO.rst` file. Currently it contains:
+
+.. include:: TODO.rst
