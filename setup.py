@@ -12,5 +12,5 @@ setup(
     license='LICENSE.TXT',
     long_description=open('README.rst').read(),
     packages=['wotconsole'],
-    install_requires=['requests']
+    install_requires=['requests>=2.12.4']
 )
