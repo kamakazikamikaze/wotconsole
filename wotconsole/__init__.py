@@ -891,10 +891,10 @@ class WOTXResponseError(Exception):
     :type status: unicode
     '''
 
-    def __init__(self, response, raw):
-        super(WOTXResponseError, self).__init__(response['error']['message'])
-        self.raw = raw  # :
-        for key, value in response.iteritems():
+    def __init__(self, rjson, response=None):
+        super(WOTXResponseError, self).__init__(rjson['error']['message'])
+        self.raw = response  # :
+        for key, value in rjson.iteritems():
             setattr(self, key, value)
 
     def __eq__(self, val):
