@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name='wotconsole',
-    version='0.2.1',
+    version='0.2.2',
     description='WarGaming World of Tanks Console API Wrapper',
     author='Kent Coble',
     author_email='coblekent@gmail.com',
