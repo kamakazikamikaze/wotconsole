@@ -12,7 +12,8 @@ Contents:
    :caption: Table of Contents
    :name: mastertoc
 
-   modules
+   api
+   examples
    todo
 
 Indices and tables
