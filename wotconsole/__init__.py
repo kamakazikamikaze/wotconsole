@@ -1,18 +1,107 @@
-r'''
+r"""
 Wrapper for WarGaming's Console API
-'''
+"""
 
+from collections import Iterable
+from datetime import datetime
+from functools import wraps
+from itertools import islice
 import requests
+
+try:
+    range = xrange
+except NameError:
+    pass
 
 #: Base URL for WG's Console API
 api_url = 'https://api-{}-console.worldoftanks.com/wotx/'
 
+# #: Type of data returned by each API requests
+# returns = {
+#     'player_search': list,
+#     'player_data': dict,
+#     'player_achievements': dict,
+#     'player_data_ps_uid': dict,
+#     'player_data_xbox_uid': dict,
+#     'player_sign_in': None,
+#     'extend_player_sign_in': None,
+#     'player_sign_out': None,
+#     'clan_search': list,
+#     'clan_details': dict,
+#     'player_clan_data': dict,
+#     'player_ratings': dict,
+# }
+
 # Accounts
 
 
+def validate_realm(func):
+    r"""
+    Checks the API realm for validity
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            realm = kwargs['api_realm']
+            if not isinstance(realm, str) or realm.lower not in (
+                    'xbox', 'ps4'):
+                raise ValueError('Argument "api_realm" is invalid!')
+        except KeyError:
+            pass
+        return func(*args, **kwargs)
+    return wrapper
+
+
+def automerge(checkparam, limit, index=None):
+    r"""
+    Auto-split requests into chunk sizes accepted by the API.
+
+    :param checkparam: Parameter to check
+    :param int limit: Maximum length allowed (by API) for "checkparam"
+    :param int index: Index of parameter if it is a positional argument
+    """
+    def decorate(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if index is not None:
+                param = args[index]
+            else:
+                try:
+                    param = kwargs[checkparam]
+                except KeyError:
+                    return func(*args, **kwargs)
+            try:
+                if len(param) > limit:
+                    first = None
+                    for l in chunker(param, limit):
+                        if not first:
+                            if index is None:
+                                kwargs[checkparam] = l
+                            else:
+                                args = (args[:index] +
+                                        (l, ) + args[index + 1:])
+                            first = func(*args, **kwargs)
+                        else:
+                            if index is None:
+                                kwargs[checkparam] = l
+                            else:
+                                args = (args[:index] +
+                                        (l, ) + args[index + 1:])
+                            res = func(*args, **kwargs)
+                            first += res
+                    return first
+                else:
+                    return func(*args, **kwargs)
+            except TypeError:
+                return func(*args, **kwargs)
+        return wrapper
+    return decorate
+
+
+@validate_realm
 def player_search(search, application_id, fields=None, limit=None, stype=None,
                   language='en', api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Search for a player by name
 
     :param str search: Player name to search for. Maximum length is 24 symbols
@@ -37,7 +126,7 @@ def player_search(search, application_id, fields=None, limit=None, stype=None,
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'account/list/',
         params={
@@ -51,9 +140,11 @@ def player_search(search, application_id, fields=None, limit=None, stype=None,
         timeout=timeout))
 
 
+@validate_realm
+@automerge('account_id', 100, 0)
 def player_data(account_id, application_id, access_token=None,
                 fields=None, language='en', api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Retrieve information on one or more players, including statistics. Private
     data requires an access token from a valid, active login.
 
@@ -70,7 +161,7 @@ def player_data(account_id, application_id, access_token=None,
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'account/info/',
         params={
@@ -83,9 +174,11 @@ def player_data(account_id, application_id, access_token=None,
         timeout=timeout))
 
 
+@validate_realm
+@automerge('account_id', 100, 0)
 def player_achievements(account_id, application_id, fields=None, language='en',
                         api_realm='xbox', timeout=10):
-    r'''
+    r"""
     View player's achievements, such as mastery badges and battle commendations
 
     :param account_id: Player account ID(s). Max limit is 100
@@ -99,7 +192,7 @@ def player_achievements(account_id, application_id, fields=None, language='en',
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'account/achievements/',
         params={
@@ -111,8 +204,10 @@ def player_achievements(account_id, application_id, fields=None, language='en',
         timeout=timeout))
 
 
+@validate_realm
+@automerge('psnid', 100, 0)
 def player_data_ps_uid(psnid, application_id, timeout=10):
-    r'''
+    r"""
     Retrieve player info using PlayStation UID
 
     :param psnid: Play Station UID(s). Max limit is 100
@@ -122,7 +217,7 @@ def player_data_ps_uid(psnid, application_id, timeout=10):
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format('ps4') + 'account/psninfo/',
         params={
@@ -132,8 +227,10 @@ def player_data_ps_uid(psnid, application_id, timeout=10):
         timeout=timeout))
 
 
+@validate_realm
+@automerge('xuid', 100, 0)
 def player_data_xbox_uid(xuid, application_id, timeout=10):
-    r'''
+    r"""
     Retrieve player info using Microsoft XUID
 
     :param xuid: Player Microsoft XUID(s). Max limit is 100
@@ -143,7 +240,7 @@ def player_data_xbox_uid(xuid, application_id, timeout=10):
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format('xbox') + 'account/xuidinfo/',
         params={
@@ -155,10 +252,11 @@ def player_data_xbox_uid(xuid, application_id, timeout=10):
 
 # Authentication
 
+@validate_realm
 def player_sign_in(application_id, display=None, expires_at=None,
                    nofollow=None, redirect_uri=None, language='en',
                    api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Log in a player, receiving an access token once completed successfully.
 
     :param str application_id: Your application key (generated by WG)
@@ -180,7 +278,7 @@ def player_sign_in(application_id, display=None, expires_at=None,
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'auth/login/',
         params={
@@ -194,9 +292,10 @@ def player_sign_in(application_id, display=None, expires_at=None,
         timeout=timeout))
 
 
+@validate_realm
 def extend_player_sign_in(access_token, application_id, expires_at=None,
                           api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Extend the active session of a user when the current session is about to
     expire
 
@@ -209,7 +308,7 @@ def extend_player_sign_in(access_token, application_id, expires_at=None,
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'auth/prolongate/',
         params={
@@ -220,9 +319,10 @@ def extend_player_sign_in(access_token, application_id, expires_at=None,
         timeout=timeout))
 
 
+@validate_realm
 def player_sign_out(access_token, application_id,
                     api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Terminate the user's active session. Once successful, the access token will
     no longer be valid
 
@@ -233,7 +333,7 @@ def player_sign_out(access_token, application_id,
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'auth/logout/',
         params={
@@ -245,9 +345,10 @@ def player_sign_out(access_token, application_id,
 
 # Clans
 
+@validate_realm
 def clan_search(application_id, fields=None, limit=None, page_no=None,
-                search=None, api_realm='xbox', timeout=10):
-    r'''
+                search=None, language='en', api_realm='xbox', timeout=10):
+    r"""
     Search for clan(s)
 
     Specifying a clan is _optional._ If you do not specify one, the API will
@@ -260,85 +361,97 @@ def clan_search(application_id, fields=None, limit=None, page_no=None,
     :param int limit: Maximum number of clans to return. Max is 100
     :param int page_no: Page number to start listing on. Default is 1
     :param str search: Clan name to search for
+    :param str language: Localized language
     :param str api_realm: Platform API. "xbox" or "ps4"
     :param int timeout: Maximum allowed time to wait for response from servers
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(api_url.format(api_realm) + 'clans/list/',
                                      params={
         'application_id': application_id,
         'fields': _join_param(fields),
         'limit': limit,
         'page_no': page_no,
-        'search': search
+        'search': search,
+        'langauge': language
     },
         timeout=timeout))
 
 
+@validate_realm
+@automerge('clan_id', 100, 0)
 def clan_details(clan_id, application_id, extra=None,
-                 fields=None, api_realm='xbox', timeout=10):
-    r'''
-    Retrieve detailed information on a clan.
+                 fields=None, language='en', api_realm='xbox', timeout=10):
+    r"""
+    Retrieve detailed information on one or more clans.
 
     May also be used for retrieving a list of players in a clan.
 
-    :param int clan_id: Clan ID. Min value is 1
+    :param clan_id: Clan ID(s). Max limit 100. Min value is 1
+    :type clan_id: int or iter(int)
     :param str application_id: Your application key (generated by WG)
     :param extra: Extra fields to be included in the response
     :type extra: list(str)
     :param fields: Fields to filter or explicitly include. To exclude,
                    prepend the field with a "-"
     :type fields: list(str)
+    :param str language: Localized language
     :param str api_realm: Platform API. "xbox" or "ps4"
     :param int timeout: Maximum allowed time to wait for response from servers
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(api_url.format(api_realm) + 'clans/info/',
                                      params={
-        'clan_id': clan_id,
+        'clan_id': _join_param(clan_id),
         'application_id': application_id,
         'extra': _join_param(extra),
-        'fields': _join_param(fields)
+        'fields': _join_param(fields),
+        'language': language
     },
         timeout=timeout))
 
 
-def player_clan_data(clan_id, application_id, extra=None,
-                     fields=None, api_realm='xbox', timeout=10):
-    r'''
-    Retrieve player's clan relationship
+@validate_realm
+@automerge('account_id', 100, 0)
+def player_clan_data(account_id, application_id, extra=None,
+                     fields=None, language='en', api_realm='xbox', timeout=10):
+    r"""
+    Retrieve clan relationship for one or more players
 
-    :param str account_id: Player ID number
+    :param str account_id: Player ID number(s)
     :param str application_id: Your application key (generated by WG)
     :param extra: Additional fields to retrieve
     :type extra: list(str)
     :param fields: Fields to filter or explicitly include. To exclude,
                    prepend the field with a "-"
     :type fields: list(str)
+    :param str language: Localized language
     :param str api_realm: Platform API. "xbox" or "ps4"
     :param int timeout: Maximum allowed time to wait for response from servers
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'clans/accountinfo/',
         params={
-            'clan_id': clan_id,
+            'account_id': _join_param(account_id),
             'application_id': application_id,
             'extra': _join_param(extra),
-            'fields': _join_param(fields)
+            'fields': _join_param(fields),
+            'language': language
         },
         timeout=timeout))
 
 
+@validate_realm
 def clan_glossary(application_id, fields=None, language='en', api_realm='xbox',
                   timeout=10):
-    r'''
+    r"""
     Retrieve general information regarding clans (_not_ clan-specific info)
 
     :param str application_id: Your application key (generated by WG)
@@ -351,7 +464,7 @@ def clan_glossary(application_id, fields=None, language='en', api_realm='xbox',
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'clans/glossary/',
         params={
@@ -364,9 +477,10 @@ def clan_glossary(application_id, fields=None, language='en', api_realm='xbox',
 
 # Tankopedia
 
+@validate_realm
 def crew_info(application_id, fields=None, language='en', api_realm='xbox',
               timeout=10):
-    r'''
+    r"""
     Retrieve information about crews
 
     :param str application_id: Your application key (generated by WG)
@@ -379,7 +493,7 @@ def crew_info(application_id, fields=None, language='en', api_realm='xbox',
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/crewroles/',
         params={
@@ -390,10 +504,11 @@ def crew_info(application_id, fields=None, language='en', api_realm='xbox',
         timeout=timeout))
 
 
-# TODO: Auto-split requests and merge responses if more than 100 tank IDs given
+@validate_realm
+@automerge('tank_id', 100)
 def vehicle_info(application_id, fields=None, language='en', nation=None,
                  tank_id=None, tier=None, api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Retrieve information on one or more tanks
 
     :param str application_id: Your application key (generated by WG)
@@ -412,7 +527,7 @@ def vehicle_info(application_id, fields=None, language='en', nation=None,
     :return: Tank information
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/vehicles/',
         params={
@@ -428,12 +543,14 @@ def vehicle_info(application_id, fields=None, language='en', nation=None,
         timeout=timeout))
 
 
+@validate_realm
+@automerge('tank_id', 100, 0)
 def packages_info(tank_id, application_id, fields=None,
                   language='en', api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Retrieve package characteristics and their interdependence
 
-    :param tank_id: Vehicle(s) to retireve information for
+    :param tank_id: Vehicle(s) to retireve information for. Max limit is 100
     :type tank_id: list(int)
     :param str application_id: Your application key (generated by WG)
     :param fields: Fields to filter or explicitly include. To exclude,
@@ -445,7 +562,7 @@ def packages_info(tank_id, application_id, fields=None,
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/vehiclepackages/',
         params={
@@ -457,12 +574,14 @@ def packages_info(tank_id, application_id, fields=None,
         timeout=timeout))
 
 
+@validate_realm
+@automerge('tank_id', 100, 0)
 def equipment_consumable_info(tank_id, application_id, fields=None,
                               language='en', api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Retrieve vehicle equipment and consumables
 
-    :param tank_id: Vehicle(s) to retireve information for
+    :param tank_id: Vehicle(s) to retireve information for. Max limit is 100
     :type tank_id: list(int)
     :param str application_id: Your application key (generated by WG)
     :param fields: Fields to filter or explicitly include. To exclude,
@@ -474,7 +593,7 @@ def equipment_consumable_info(tank_id, application_id, fields=None,
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/vehicleupgrades/',
         params={
@@ -486,9 +605,11 @@ def equipment_consumable_info(tank_id, application_id, fields=None,
         timeout=timeout))
 
 
+@validate_realm
+@automerge('category', 100)
 def achievement_info(application_id, category=None, fields=None, language='en',
                      api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Retrieve list of awards, medals, and ribbons
 
     :param str application_id: Your application key (generated by WG)
@@ -508,7 +629,7 @@ def achievement_info(application_id, category=None, fields=None, language='en',
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/achievements/',
         params={
@@ -520,9 +641,10 @@ def achievement_info(application_id, category=None, fields=None, language='en',
         timeout=timeout))
 
 
+@validate_realm
 def tankopedia_info(application_id, fields=None, language='en',
                     api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Retrieve information regarding the Tankopeida itself
 
     :param str application_id: Your application key (generated by WG)
@@ -535,7 +657,7 @@ def tankopedia_info(application_id, fields=None, language='en',
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'encyclopedia/info/',
         params={
@@ -548,9 +670,10 @@ def tankopedia_info(application_id, fields=None, language='en',
 
 # Player ratings
 
+@validate_realm
 def types_of_ratings(application_id, fields=None, language='en',
                      platform=None, api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Retrieve dictionary of rating periods and ratings details
 
     :param str application_id: Your application key (generated by WG)
@@ -570,7 +693,7 @@ def types_of_ratings(application_id, fields=None, language='en',
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'ratings/types/',
         params={
@@ -582,10 +705,12 @@ def types_of_ratings(application_id, fields=None, language='en',
         timeout=timeout))
 
 
+@validate_realm
+@automerge('account_id', 100)
 def dates_with_ratings(rating, application_id, account_id=None, fields=None,
                        language='en', platform=None, api_realm='xbox',
                        timeout=10):
-    r'''
+    r"""
     Retrieve dates with available rating data
 
     :param str rating: Rating period
@@ -605,7 +730,7 @@ def dates_with_ratings(rating, application_id, account_id=None, fields=None,
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'ratings/dates/',
         params={
@@ -619,10 +744,11 @@ def dates_with_ratings(rating, application_id, account_id=None, fields=None,
         timeout=timeout))
 
 
-# TODO: Accept `time`/`datetime` timestamp for `date` parameter
+@validate_realm
+@automerge('account_id', 100, 1)
 def player_ratings(rating, account_id, application_id, date=None, fields=None,
                    language='en', platform=None, api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Retrieve player ratings by specified IDs
 
     :param str rating: Rating period
@@ -632,6 +758,7 @@ def player_ratings(rating, account_id, application_id, date=None, fields=None,
     :param date: Ratings calculation date. Up to 7 days before the current
                  date. Default value: yesterday. Date in UNIX timestamp or ISO
                  8601 format. E.g. 1376542800 or 2013-08-15T00:00:00
+    :type date: str or int or datetime.datetime
     :param str language: Response language
     :param str platform: Console platform. Default is "default" (all consoles).
                          Valid responses:
@@ -645,7 +772,9 @@ def player_ratings(rating, account_id, application_id, date=None, fields=None,
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
+    if date and isinstance(date, datetime.datetime):
+        date = date.isoformat()
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'ratings/accounts/',
         params={
@@ -660,11 +789,13 @@ def player_ratings(rating, account_id, application_id, date=None, fields=None,
         timeout=timeout))
 
 
+@validate_realm
+@automerge('account_id', 100, 0)
 def adjacent_positions_in_ratings(
         account_id, rank_field, rating, application_id, date=None,
         fields=None, language='en', limit=None, platform=None,
         api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Retrieve list of adjacent positions in specified rating
 
     :param account_id: Player account ID. Max limit is 100
@@ -675,6 +806,7 @@ def adjacent_positions_in_ratings(
     :param date: Ratings calculation date. Up to 7 days before the current
                  date. Default value: yesterday. Date in UNIX timestamp or ISO
                  8601 format. E.g. 1376542800 or 2013-08-15T00:00:00
+    :type date: str or int or datetime.datetime
     :param str language: Response language
     :param int limit: Number of returned entries. Default is 5. Max limit is 50
     :param str platform: Console platform. Default is "default" (all consoles).
@@ -689,11 +821,13 @@ def adjacent_positions_in_ratings(
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
+    if date and isinstance(date, datetime.datetime):
+        date = date.isoformat()
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'ratings/neighbors/',
         params={
-            'account_id': account_id,
+            'account_id': _join_param(account_id),
             'rank_field': rank_field,
             'type': rating,
             'application_id': application_id,
@@ -706,10 +840,11 @@ def adjacent_positions_in_ratings(
         timeout=timeout))
 
 
+@validate_realm
 def top_players(rank_field, rating, application_id, date=None, fields=None,
                 language='en', limit=None, page_no=None, platform=None,
                 api_realm='xbox', timeout=10):
-    r'''
+    r"""
     Retrieve the list of top players by specified parameter
 
     :param str rank_field: Rating category
@@ -718,6 +853,7 @@ def top_players(rank_field, rating, application_id, date=None, fields=None,
     :param date: Ratings calculation date. Up to 7 days before the current
                  date. Default value: yesterday. Date in UNIX timestamp or ISO
                  8601 format. E.g. 1376542800 or 2013-08-15T00:00:00
+    :type date: str or int or datetime.datetime
     :param fields: Fields to filter or explicitly include. To exclude,
                    prepend the field with a "-"
     :type fields: list(str)
@@ -737,7 +873,9 @@ def top_players(rank_field, rating, application_id, date=None, fields=None,
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
+    if date and isinstance(date, datetime.datetime):
+        date = date.isoformat()
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'ratings/top/',
         params={
@@ -756,10 +894,12 @@ def top_players(rank_field, rating, application_id, date=None, fields=None,
 # Player's vehicles
 
 
+@validate_realm
+# @automerge('tank_id', 100)
 def player_tank_statistics(account_id, application_id, access_token=None,
                            in_garage=None, fields=None, api_realm='xbox',
                            language='en', tank_id=None, timeout=10):
-    r'''
+    r"""
     Retrieve information on all tanks that a player has owned and/or used
 
     :param int account_id: target player ID
@@ -779,25 +919,58 @@ def player_tank_statistics(account_id, application_id, access_token=None,
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
-    return WOTXResponse(requests.get(
-        api_url.format(api_realm) + 'tanks/stats/',
-        params={
-            'account_id': account_id,
-            'application_id': application_id,
-            'access_token': access_token,
-            'in_garage': in_garage,
-            'fields': _join_param(fields),
-            'language': language,
-            'tank_id': _join_param(tank_id)
-        },
-        timeout=timeout))
+    """
+    if len(tank_id) > 100:
+        first = None
+        for tanks in chunker(tank_id, 100):
+            if first is None:
+                first = WOTXResponse(requests.get(
+                    api_url.format(api_realm) + 'tanks/stats/',
+                    params={
+                        'account_id': account_id,
+                        'application_id': application_id,
+                        'access_token': access_token,
+                        'in_garage': in_garage,
+                        'fields': _join_param(fields),
+                        'language': language,
+                        'tank_id': _join_param(tanks)
+                    },
+                    timeout=timeout))
+            else:
+                res = WOTXResponse(requests.get(
+                    api_url.format(api_realm) + 'tanks/stats/',
+                    params={
+                        'account_id': account_id,
+                        'application_id': application_id,
+                        'access_token': access_token,
+                        'in_garage': in_garage,
+                        'fields': _join_param(fields),
+                        'language': language,
+                        'tank_id': _join_param(tanks)
+                    },
+                    timeout=timeout))
+                first.data[str(account_id)] += res.data[str(account_id)]
+        return first
+    else:
+        return WOTXResponse(requests.get(
+            api_url.format(api_realm) + 'tanks/stats/',
+            params={
+                'account_id': account_id,
+                'application_id': application_id,
+                'access_token': access_token,
+                'in_garage': in_garage,
+                'fields': _join_param(fields),
+                'language': language,
+                'tank_id': _join_param(tank_id)
+            },
+            timeout=timeout))
 
 
+@validate_realm
 def player_tank_achievements(account_id, application_id, access_token=None,
                              fields=None, in_garage=None, tank_id=None,
                              api_realm='xbox', language='en', timeout=10):
-    r'''
+    r"""
     Retrieve players' achievement details
 
     :param int account_id: target player ID
@@ -817,7 +990,7 @@ def player_tank_achievements(account_id, application_id, access_token=None,
     :return: API response
     :rtype: WOTXResponse
     :raises WOTXResponseError: If the API returns with an "error" field
-    '''
+    """
     return WOTXResponse(requests.get(
         api_url.format(api_realm) + 'tanks/achievements/',
         params={
@@ -833,7 +1006,7 @@ def player_tank_achievements(account_id, application_id, access_token=None,
 
 
 class WOTXResponse(object):
-    r'''
+    r"""
     Response wrapper for WG's API
 
     :ivar data: Values returned by the API servers
@@ -844,7 +1017,7 @@ class WOTXResponse(object):
     :type raw: requests.models.Response
     :ivar status: Usually just the message `'ok'`
     :type status: unicode
-    '''
+    """
 
     def __init__(self, response):
         rjson = response.json()
@@ -876,9 +1049,33 @@ class WOTXResponse(object):
                 'This instance does not have the attribute \'{}\''.format(
                     unknown))
 
+    def __iadd__(self, object):
+        if isinstance(object, WOTXResponse) and isinstance(
+                object.data, type(self.data)):
+            if isinstance(self.data, dict):
+                self.data.update(object.data)
+            else:
+                self.data += object.data
+            if 'count' in self.meta:
+                self.meta['count'] = len(self.data)
+            if 'total' in self.meta:
+                self.meta['total'] = len(self.data)
+        elif isinstance(object, type(self.data)):
+            if isinstance(self.data, dict):
+                self.data.update(object)
+            else:
+                self.data += object
+            if 'count' in self.meta:
+                self.meta['count'] = len(self.data)
+            if 'total' in self.meta:
+                self.meta['total'] = len(self.data)
+        else:
+            raise NotImplementedError
+        return self
+
 
 class WOTXResponseError(Exception):
-    r'''
+    r"""
     Error(s) in interaction with WG's API
 
     :ivar error: Metadata on the error
@@ -889,9 +1086,11 @@ class WOTXResponseError(Exception):
     :type raw: requests.models.Response
     :ivar status: Ususally just the message `'error'`
     :type status: unicode
-    '''
+    """
 
     def __init__(self, rjson, response=None):
+        if isinstance(rjson['error'], str):
+            rjson['error'] = {'message': rjson['error']}
         super(WOTXResponseError, self).__init__(rjson['error']['message'])
         self.raw = response  # :
         for key, value in rjson.iteritems():
@@ -919,16 +1118,34 @@ class WOTXResponseError(Exception):
 
 
 def _join_param(param):
-    r'''
+    r"""
     Utility method to perform a :py:func:`join` on parameters, if necessary
-    '''
+    """
     return param if _not_iter(param) else ','.join(map(str, param))
 
 
 def _not_iter(item):
-    r'''
+    r"""
     Helper function to determine if the object can be iterated over. Used for
-    protecting against invalid input by user for parameters than need to be
+    protecting against invalid input by user for parameters that need to be
     `join`'d
-    '''
+    """
     return item is None or any(isinstance(item, i) for i in [str, int])
+
+
+def chunker(seq, size):
+    r"""
+    Break data down into sizable chunks.
+
+    All credit goes to https://stackoverflow.com/a/434328
+    :param seq: Iterable data
+    :type seq: list or tuple
+    :param int size: Maximum length per chunk
+    :return: Segmented data
+    :rtype: list
+    """
+    for pos in range(0, len(seq), size):
+        if isinstance(seq, Iterable):
+            yield [s for s in islice(seq, pos, pos + size)]
+        else:
+            yield seq[pos:pos + size]
