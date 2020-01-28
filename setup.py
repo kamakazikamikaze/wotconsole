@@ -2,6 +2,9 @@
 
 from setuptools import setup
 
+with open('README.rst') as f:
+  long_description = f.read()
+
 setup(
     name='wotconsole',
     version='0.4.1',
@@ -10,7 +13,7 @@ setup(
     author_email='coblekent@gmail.com',
     url='https://bitbucket.org/kamakazikamikaze/wotconsole',
     license='LICENSE.TXT',
-    long_description=open('README.rst').read(),
+    long_description=long_description,
     packages=['wotconsole'],
     install_requires=['requests>=2.22.0']
 )

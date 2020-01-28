@@ -20,7 +20,7 @@ endpoints or do not have sufficient documentation to understand how to fully
 utilize their libraries. As such, I took it upon myself to create one that was
 thorough and easy to use.
 
-Why not stick with :py:mod:`~.requests`?
+Why not stick with `requests <https://pypi.org/project/requests/>`?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 While the ``requests`` library may suffice for
@@ -102,10 +102,8 @@ developers may not care for. We can rewrite the code as follows:
 What improvements will we see?
 ------------------------------
 
-An up-to-date list of planned features will always be in the
-:file:`TODO.rst` file. Currently it contains:
-
-.. include:: TODO.rst
+An up-to-date list of planned features will always be in the TODO.rst
+file.
 
 .. |docs| image:: https://readthedocs.org/projects/docs/badge/?version=latest
     :alt: Documentation Status
