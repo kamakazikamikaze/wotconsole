@@ -946,7 +946,7 @@ class WOTXResponse(object):
         if 'data' not in rjson:
             raise WOTXResponseError(rjson, response)
         self.raw = response
-        for key, value in rjson.iteritems():
+        for key, value in rjson.items():
             setattr(self, key, value)
 
     def __eq__(self, val):
@@ -1015,7 +1015,7 @@ class WOTXResponseError(Exception):
             rjson['error'] = {'message': rjson['error']}
         super(WOTXResponseError, self).__init__(rjson['error']['message'])
         self.raw = response  # :
-        for key, value in rjson.iteritems():
+        for key, value in rjson.items():
             setattr(self, key, value)
 
     def __eq__(self, val):

@@ -3,11 +3,11 @@
 from setuptools import setup
 
 with open('README.rst') as f:
-  long_description = f.read()
+    long_description = f.read()
 
 setup(
     name='wotconsole',
-    version='0.4.1',
+    version='0.4.2',
     description='WarGaming World of Tanks Console API Wrapper',
     author='Kent Coble',
     author_email='coblekent@gmail.com',
